@@ -1,0 +1,9 @@
+import './native-store-adapter.js';
+import './vendor/marked/marked.min.js';
+import './shared/platforms.js';
+import './shared/model.js';
+import './shared/store.js';
+import './shared/file-match.js';
+import './native-core.js';
+import './assets/native-api.js';
+import './background.js';

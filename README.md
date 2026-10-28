@@ -1,0 +1,3 @@
+# <img src="icons/icon128.png" width="45" align="left" alt=""> Prompt Chain
+
+> 在 ChatGPT、Gemini、DeepSeek 中按顺序发送提示词或提示词链条，快速进入设定的状态...

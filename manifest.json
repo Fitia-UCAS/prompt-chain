@@ -1,0 +1,105 @@
+{
+  "manifest_version": 3,
+  "name": "Prompt Chain",
+  "version": "0.6.3",
+  "description": "在 ChatGPT、Gemini 和 DeepSeek 中编排提示词与附件，等待回答后自动执行下一步。",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "alarms",
+    "sidePanel",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
+    "https://chat.deepseek.com/*"
+  ],
+  "background": {
+    "service_worker": "background-module.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "打开 Prompt Chain",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      }
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://chat.deepseek.com/*"
+      ],
+      "resources": [
+        "assets/rpc.js",
+        "assets/site-runtime.js",
+        "content/chain-runner.mjs",
+        "shared/platforms.mjs",
+        "shared/platforms.js",
+        "content/deepseek-adapter.mjs",
+        "content/gemini-upload.mjs"
+      ]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://chat.deepseek.com/*"
+      ],
+      "js": [
+        "assets/site-loader.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://chat.deepseek.com/*"
+      ],
+      "js": [
+        "vendor/marked/marked.min.js",
+        "shared/platforms.js",
+        "shared/model.js",
+        "content/history-reader.js",
+        "content/site-messages.js",
+        "content/message-reader.js",
+        "content/supervisor-engine.js",
+        "content/bridge.js",
+        "content/native-files.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

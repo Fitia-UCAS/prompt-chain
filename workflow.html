@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="shared/logging.js"></script>
+  <meta name="color-scheme" content="light dark"><title>Prompt Chain</title>
+  <link rel="icon" type="image/png" href="icons/icon32.png">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="app-header">
+      <button class="brand" id="home" aria-label="返回流程库"><img class="brand-mark" src="icons/icon48.png" alt=""><span>Prompt Chain</span></button>
+      <span id="connection" class="connection" role="img" aria-label="未连接对话"><i></i></span>
+      <button class="icon-button" id="refresh-connection" aria-label="刷新连接"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg></button>
+      <button class="icon-button" id="menu-toggle" aria-label="更多操作">···</button>
+      <div id="menu" class="popover" hidden>
+        <button id="export-flow-menu" data-action="export" hidden>导出当前流程</button>
+        <button data-action="export-all">导出全部流程</button>
+        <button data-action="trash">最近删除</button>
+        <button id="delete-flow-menu" data-action="delete-flow" class="danger" hidden>删除当前流程</button>
+      </div>
+    </header>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <main id="main">
+      <section id="library-view">
+        <div class="search-row"><label class="search"><span>⌕</span><input id="search" type="search" aria-label="搜索流程" placeholder="搜索你的流程"></label><select id="sort" aria-label="排序"><option value="recent">最近编辑</option><option value="name">名称</option></select></div>
+        <div id="empty-state" class="empty-state">
+          <div class="empty-symbol"><span>01</span><i></i><span>02</span><i></i><span>03</span></div>
+          <h1>还没有流程</h1>
+          <div class="empty-actions"><button class="primary" data-action="import-chat">导入聊天记录 <span>↗</span></button><button class="secondary" data-action="new">＋ 新建流程</button></div>
+        </div>
+        <div class="section-heading"><span>我的流程</span><span id="flow-count">0</span></div>
+        <div id="flow-list" class="flow-list"></div>
+        <div id="no-results" class="no-results" hidden>没有找到匹配的流程</div>
+      </section>
+      <section id="editor-view" hidden>
+        <div class="view-toolbar"><button class="text-button" data-action="back">‹ 流程库</button></div>
+        <div id="creation-sources" class="source-actions" hidden><button id="source-chat" class="secondary" data-source-icon="chat">导入聊天</button><button id="source-skill" class="secondary" data-source-icon="skill">导入 Skill</button><button id="source-prompts" class="secondary" data-source-icon="prompts">导入 Prompts</button><button id="source-markdown" class="secondary" data-source-icon="file">导入 Markdown</button></div>
+        <input id="flow-title" class="flow-title" placeholder="给这个流程起个名字" aria-label="流程名称">
+        <div class="directory-row"><button id="directory-name" class="text-button" data-action="bind-folder">选择附件目录</button></div>
+        <div id="missing-files" class="missing-files" hidden><span id="missing-count"></span></div>
+        <div id="steps" class="steps"></div>
+        <button class="add-step" data-action="add-step">＋ 添加一步</button>
+      </section>
+      <section id="monitor-view" hidden>
+        <div class="view-toolbar"><button class="text-button" data-action="back">‹ 流程库</button><button class="text-button" id="open-target">打开目标对话 ↗</button></div>
+        <h1 id="monitor-title">执行记录</h1>
+        <details id="step-console" class="monitor-panel" open>
+          <summary><span>步骤进度</span><span id="step-progress-count" class="panel-meta"></span><span id="step-tools" class="panel-tools"><button id="pause" class="panel-tool" aria-label="暂停"></button><button id="resume" class="panel-tool" aria-label="恢复执行" hidden></button><button id="stop" class="panel-tool danger" aria-label="停止流程"></button></span><svg class="panel-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></summary>
+          <div class="panel-content"><div id="monitor-steps" class="monitor-steps" role="list" aria-label="步骤进度" tabindex="0"></div></div>
+        </details>
+        <details id="reply-console" class="monitor-panel" open>
+          <summary><span id="reply-title">回答验证：</span><svg class="panel-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></summary>
+          <div class="panel-content"><pre id="last-reply" class="reply-body"></pre></div>
+        </details>
+        <details id="log-console" class="monitor-panel" open>
+          <summary><span>执行日志</span><span class="panel-tools log-tools"><button id="copy-logs" class="panel-tool" aria-label="复制执行日志" disabled></button><button id="clear-logs" class="panel-tool" aria-label="清空执行日志" disabled></button></span><svg class="panel-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></summary>
+          <div class="panel-content"><div id="logs" class="logs" role="log" aria-live="off"></div></div>
+        </details>
+      </section>
+      <section id="trash-view" hidden>
+        <div class="view-toolbar"><button class="text-button" data-action="back">‹ 流程库</button></div>
+        <div class="trash-heading"><h1>最近删除</h1><div class="trash-actions"><button id="empty-trash" class="icon-button danger" aria-label="清空最近删除" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg></button></div></div><div id="trash-list" class="flow-list"></div><div id="trash-empty" class="no-results">没有已删除的流程</div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="target-row"><span class="target-icon">↗</span><select id="target" aria-label="选择目标聊天页面"><option value="">选择目标对话</option></select></div>
+      <div id="library-actions" class="footer-actions"><button class="secondary" data-action="import-chat">↗ 导入记录</button><button class="primary" data-action="new">＋ 新建流程</button></div>
+      <div id="editor-actions" class="footer-actions" hidden><button class="secondary" data-action="save">保存流程</button><button class="primary" id="run">▶ 开始执行</button></div>
+      <div id="monitor-footer" hidden></div>
+    </footer>
+  </div>
+  <input id="chat-file" type="file" accept=".md,.markdown,.txt" hidden>
+  <input id="backup-file" type="file" accept=".json" hidden>
+  <input id="step-file" type="file" multiple hidden>
+  <input id="folder-files" type="file" webkitdirectory multiple hidden>
+  <input id="prompts-file" type="file" accept=".json,.txt,.md,.markdown" multiple hidden><input id="markdown-file" type="file" accept=".md,.markdown,.txt" multiple hidden>
+  <script src="shared/icons.js"></script><script src="shared/platforms.js"></script><script src="shared/model.js"></script><script src="shared/store.js"></script><script src="shared/chat-import.js"></script><script src="shared/file-match.js"></script><script src="shared/source-import.js"></script><script src="sidepanel.js"></script>
+</body>
+</html>
