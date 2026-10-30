@@ -7,8 +7,11 @@
   let active = null, disposed = false, timer = null, interval = null, observer = null;
   const snapshot = () => ({...E.snapshot(), bridgeVersion:2, documentId, operation: active ? {id: active.id, attempted: active.attempted} : null});
   // A card per file can arrive with long gaps and no busy marker in between, so
-  // "nothing changed for this long" is the only reliable stall signal.
-  const UPLOAD_STALL_MS=30000;
+  // "nothing changed for this long" is the only reliable stall signal. The site
+  // may also keep a card spinning for a long time; a spinner means the file was
+  // already accepted, so it never counts towards the stall window.
+  const UPLOAD_STALL_MS=60000;
+  const UPLOAD_BUDGET_MS=180000;
   const invalidated = error => /extension context invalidated/i.test(error?.message || String(error));
   function dispose() {
     if (disposed) return;
@@ -53,7 +56,11 @@
   }
   function uploadBusy(form) {
     if(!form)return false;
-    return [...form.querySelectorAll('[aria-busy="true"],[role="progressbar"],[aria-label*="Uploading" i],[aria-label*="上传中"],[class*="animate-spin"]')].some(E.rendered);
+    // Global signals first, then attachment-scoped ones: a pulsing skeleton inside
+    // a file card means that file is still being processed, while an unrelated
+    // pulse elsewhere in the composer must not block sending forever.
+    const selectors=['[aria-busy="true"]','[role="progressbar"]','[aria-label*="Uploading" i]','[aria-label*="上传中"]','[class*="animate-spin"]','[data-testid*="attachment" i] [class*="animate-pulse"]','[data-testid*="attachment" i] [data-testid*="progress" i]'].join(',');
+    return [...form.querySelectorAll(selectors)].some(E.rendered);
   }
   function uploadError(form) {
     const auth=[...document.querySelectorAll('[role="dialog"]')].find(dialog=>E.rendered(dialog)&&/登录|注册|log in|sign in/i.test(dialog.innerText));
@@ -155,7 +162,7 @@
       input.dispatchEvent(new Event('change', {bubbles: true}));
     }
     let quiet = 0, busySamples = 0;
-    while (Date.now() - timeline.startedAt < 120000) {
+    while (Date.now() - timeline.startedAt < UPLOAD_BUDGET_MS) {
       await E.sleep(250); guard(op);
       const current=E.composer();
       if(!form.isConnected||!current||E.scope(current)!==form)throw new Error('UPLOAD_COMPOSER_CHANGED: Attachment composer was replaced; reconnect before resuming');
@@ -283,7 +290,7 @@
       for(let i=0;i<refs.length;i++){
         await assign(inputList[i],[i]);
         // Let the website accept the previous attachment before the next selection.
-        const stop=Date.now()+120000;
+        const stop=Date.now()+UPLOAD_BUDGET_MS;
         while(Date.now()<stop){
           await E.sleep(250);guard(op);
           if(E.composer()!==c||!form.isConnected||E.ctext(c))throw new Error('UPLOAD_COMPOSER_CHANGED: Draft or composer changed');
@@ -301,16 +308,18 @@
     // Files are processed one at a time and each card only appears when its own
     // upload finishes; a change in the confirmed set therefore restarts the stall
     // window instead of the whole batch failing after a fixed 8 seconds.
-    while(Date.now()-startedAt<120000){
+    while(Date.now()-startedAt<UPLOAD_BUDGET_MS){
       await E.sleep(250);guard(op);
       if(E.composer()!==c||!form.isConnected||E.ctext(c))throw new Error('UPLOAD_COMPOSER_CHANGED: Draft or composer changed');
       const scan=E.scanAttachmentSet(c,refs),error=uploadError(form);
       const busy=uploadBusy(form),sendReady=!!E.sendBtn(c);
       const confirmed=scan.files.filter(item=>item.state==='match').length;
-      const waitingFor=scan.state==='match'?(busy?'processing':sendReady?'upload stability':'send button'):'missing attachment cards '+confirmed+'/'+refs.length;
+      const waitingFor=scan.state==='match'?(busy?'processing':sendReady?'upload stability':'send button'):(busy?'attachment still processing ':'waiting for attachment cards ')+confirmed+'/'+refs.length;
       snapshotDiagnostic('observing',scan,waitingFor,selection,busy);
       if(error)throw new Error('UPLOAD_REJECTED: '+error);
-      if(scan.state==='conflict')throw new Error('UPLOAD_ATTACHMENT_MISMATCH: Unexpected or duplicate attachment card; no message sent');
+      // While a file is visibly processing, an extra/unreadable card is expected
+      // (its name is not rendered yet); only judge the set once processing stops.
+      if(scan.state==='conflict'&&!busy)throw new Error('UPLOAD_ATTACHMENT_MISMATCH: Unexpected or duplicate attachment card; no message sent');
       const state=scan.files.map(item=>item.state).join(',');
       if(state!==progress){progress=state;observed=Date.now();}
       if(scan.state==='match'&&!busy&&sendReady&&selection.every(value=>value==='confirmed')){

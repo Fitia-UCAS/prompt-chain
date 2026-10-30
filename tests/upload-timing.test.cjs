@@ -91,6 +91,21 @@ test('上传忙碌持续超过八秒后，卡片在忙碌结束之后才渲染�
   assert.ok(h.diagnostic().busySamples >= 40, 'busy samples should be recorded');
 });
 
+test('转圈持续超过停滞窗口仍按已接收处理，不误报缺失', async () => {
+  const h = harness();
+  let settled = false, outcome;
+  h.result.then(value => {settled = true; outcome = value;});
+  await h.advance(90000);
+  assert.equal(settled, false, 'a visible progress indicator must not fail the upload');
+  assert.equal(h.diagnostic().busy, true);
+  h.setPresent(true);
+  h.setBusy(false);
+  for (let step = 0; step < 40 && !settled; step++) await h.advance(250);
+  assert.equal(settled, true, 'upload should settle once processing ends');
+  assert.equal(outcome.ok, true, outcome.error);
+  assert.equal(h.clicks, 1);
+});
+
 test('上传处理结束后等待完整个窗口仍无卡片才报错，并说明范围与候选数量', async () => {
   const h = harness();
   let settled = false, outcome;
@@ -98,7 +113,7 @@ test('上传处理结束后等待完整个窗口仍无卡片才报错，并说�
   await h.advance(11250);
   h.setBusy(false);
   await h.advance(250);
-  for (let step = 0; step < 140 && !settled; step++) await h.advance(250);
+  for (let step = 0; step < 260 && !settled; step++) await h.advance(250);
   assert.equal(settled, true, 'upload should settle');
   assert.equal(outcome.ok, false);
   assert.match(outcome.error, /^UPLOAD_PREVIEW_NOT_RECOGNIZED:/);
