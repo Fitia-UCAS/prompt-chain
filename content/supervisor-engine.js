@@ -99,6 +99,10 @@ const INVISIBLE_CHARS=/[\u200b-\u200f\u202a-\u202e\u2060\ufeff]/g;
 const DASH_CHARS=/[\u2010\u2011\u2012\u2013\u2014\u2212]/g;
 const PICKER_LABEL=/^(?:attach|upload|add\s+(?:file|photo|attachment)|添加|上传|选择文件)/i;
 const nameNorm=value=>PromptFlowModel.echoNorm(String(value||'').replace(INVISIBLE_CHARS,'').replace(DASH_CHARS,'-'));
+// ChatGPT may replace characters that are unsafe in a filename (：，、) with an
+// underscore or strip them, so a sanitised display name still identifies the file.
+const LOOSE_PUNCT=/[\s:：,，、;；·・_—–\-()（）\[\]【】<>《》"'“”‘’]/g;
+const looseName=value=>nameNorm(value).replace(LOOSE_PUNCT,'');
 function nodePath(node){
   const parts=[];
   for(let el=node,i=0;el&&el.tagName&&el!==document.body&&i<4;el=el.parentElement,i++){
@@ -202,6 +206,8 @@ function judgeName(value,spec){
   const parts=fileParts(text),prefix=text.replace(/(?:…|\.{3})+$/u,'').trim();
   const stripped=text.replace(/(?:…|\.{3})/g,'').trim(),cut=fileParts(stripped);
   if(text===spec.full||text.includes(spec.full))return{state:'match',strength:'strong',reason:'full-name'};
+  const looseText=looseName(text),looseFull=looseName(spec.full);
+  if(looseText&&looseText===looseFull)return{state:'match',strength:'strong',reason:'sanitised-full-name'};
   if(parts.ext&&parts.ext!==spec.ext&&parts.stem.length>=6&&(spec.stem.startsWith(parts.stem)||parts.stem.startsWith(spec.stem)))return{state:'mismatch',strength:'strong',reason:'extension-conflict'};
   if(parts.ext&&parts.ext===spec.ext&&parts.stem===spec.stem)return{state:'match',strength:'strong',reason:'name-and-extension'};
   const counter=parts.ext===spec.ext?/^(.+?)\s*\((\d{1,3})\)$/.exec(parts.stem):null;
@@ -211,6 +217,7 @@ function judgeName(value,spec){
   if(text===spec.stem)return{state:'match',strength:'weak',reason:'stem-only'};
   if(prefix!==text&&prefix.length>=6&&spec.full.startsWith(prefix))return{state:'match',strength:'weak',reason:'truncated-prefix'};
   if(text.length>=6&&spec.full.startsWith(text))return{state:'match',strength:'weak',reason:'name-prefix'};
+  if(looseText.length>=8&&spec.stem.length>=6&&looseFull.startsWith(looseText))return{state:'match',strength:'weak',reason:'sanitised-prefix'};
   if(parts.ext)return{state:'mismatch',strength:'weak',reason:'other-file-name'};
   if(spec.stem.length>=6&&text.length>=6&&spec.stem.startsWith(text))return{state:'match',strength:'weak',reason:'stem-prefix'};
   return null;
@@ -227,6 +234,7 @@ function fileTokens(text){
 function tokenIsOurs(token,spec){
   const text=nameNorm(token);
   if(text===spec.full||text.endsWith(spec.full))return true;
+  if(looseName(text)===looseName(spec.full))return true;
   const stripped=text.replace(/(?:…|\.{3})/g,'').trim(),cut=fileParts(stripped);
   if(cut.ext!==spec.ext)return false;
   if(cut.stem===spec.stem)return true;
@@ -354,7 +362,8 @@ function scanAttachmentSet(c,refs){
   // of our own files must not abort the batch.
   const extras=all.map((node,index)=>index).filter(index=>!assigned.has(index)&&!judgements[index].some(item=>item.state==='match'));
   const state=collisions.length||files.some(item=>item.state==='ambiguous')||extras.length?'conflict':files.some(item=>item.state!=='match')?'missing':'match';
-  return {state,files,cardCount:all.length,extras:extras.length,collisions,roots:roots.map(item=>({kind:item.kind,tag:item.root.tagName})),nodes:all};
+  const extraTexts=extras.slice(0,3).map(index=>clean(cardText(all[index])).slice(0,80));
+  return {state,files,cardCount:all.length,extras:extras.length,extraTexts,collisions,roots:roots.map(item=>({kind:item.kind,tag:item.root.tagName})),nodes:all};
 }
 function attachmentCardCount(root){
   if(!root||!root.querySelectorAll)return null;

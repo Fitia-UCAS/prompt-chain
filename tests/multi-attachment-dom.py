@@ -68,6 +68,22 @@ with sync_playwright() as p:
     }''',REAL_NAMES)
     results['real_chatgpt_three_cards']={'expected':'match','observed':real_result}
     page.close()
+    # ChatGPT rewrites characters that are unsafe in a filename (：，、 become _),
+    # so the card text no longer equals the stored name.
+    sanitized=['穿书反派_修为尽失_女主逆推.txt','我杂役弟子_女主怎么全跑过来了.txt']
+    page=browser.new_page()
+    page.set_content(html(sanitized))
+    page.add_script_tag(content=(ROOT/'shared/platforms.js').read_text(encoding='utf-8'))
+    page.add_script_tag(content=(ROOT/'shared/model.js').read_text(encoding='utf-8'))
+    page.evaluate("window.PromptChainMessages={read:()=>({messages:[]})};PromptFlowModel.platforms.providerFor=()=> 'chatgpt'")
+    page.add_script_tag(content=(ROOT/'content/supervisor-engine.js').read_text(encoding='utf-8'))
+    sanitized_result=page.evaluate('''names => {
+      const refs=names.map((name,i)=>({id:'f'+i,name,size:3,mimeType:'text/plain'}));
+      const scan=PromptFlowSupervisor.scanAttachmentSet(PromptFlowSupervisor.composer(),refs);
+      return {state:scan.state,cardCount:scan.cardCount,extras:scan.extras,files:scan.files.map(item=>({name:item.name,state:item.state,strength:item.strength}))};
+    }''',['穿书反派：修为尽失，女主逆推.txt','我杂役弟子，女主怎么全跑过来了.txt'])
+    results['sanitised_filenames']={'expected':'match','observed':sanitized_result}
+    page.close()
     browser.close()
 failed=[name for name,row in results.items() if row['observed']['state']!=row['expected']]
 print(json.dumps({'status':'PASS' if not failed else 'FAIL','cases':results},ensure_ascii=False,indent=2))

@@ -33,14 +33,11 @@ export function createConnection({chrome, model: M, runs, native, clock: Date = 
         await chrome.scripting.executeScript({target:{tabId},files:['vendor/marked/marked.min.js','shared/platforms.js','shared/model.js','content/history-reader.js','content/site-messages.js','content/message-reader.js','content/supervisor-engine.js']});
         response=await ask(tabId);if(!response?.ok)throw new Error('读取器更新后未连接');
       }
-      const snapshot=response.snapshot,run=await getRun(),operation=run?.tabId===tabId?(run.pending||run.delivery):null;
-      if(M.platforms.providerFor(snapshot.url)==='chatgpt'&&M.conversationPath(snapshot.url)&&snapshot.reader&&(snapshot.reader.users===0||snapshot.reader.assistants===0||(snapshot.lastRole==='user'&&!snapshot.generating)||(operation&&!M.receipt(snapshot,operation)))){
-        try{
-          const result=await chrome.scripting.executeScript({target:{tabId},func:async url=>globalThis.PromptChainHistory.read(url),args:[snapshot.url]});
-          if(result?.[0]?.result)return historySnapshot(snapshot,result[0].result,operation);
-        }catch(error){snapshot.reader.historyError=error.message;}
-      }
-      return snapshot;
+      // The page already renders every turn we need (the sent message and its
+      // answer are the newest ones), so the conversation is never fetched from
+      // the backend: no extra requests, no rate limits. PromptChainHistory stays
+      // available for diagnostics only.
+      return response.snapshot;
     } catch (error) {
       if (/^(?:TARGET_TAB_|WEB_)/.test(error.message || '')) throw error;
       if (!inject) throw failure('WEB_NOT_CONNECTED','The page did not answer the extension; refresh it before resuming',error);

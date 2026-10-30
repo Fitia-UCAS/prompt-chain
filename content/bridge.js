@@ -220,7 +220,7 @@
         strength:scan?.files?.[index]?.strength||'none',hits:scan?.files?.[index]?.hits??null,alias:scan?.files?.[index]?.alias||'',busy,reason:reason||''}));
       lastUploadState={v:4,stage,operation,sampledAt:Date.now(),elapsedMs:Date.now()-startedAt,
         fileCount:refs.length,expected:refs.map(ref=>({id:ref.id,name:ref.name,size:ref.size})),files,
-        cardCount:scan?.cardCount??null,extras:scan?.extras??null,conflicts:scan?.collisions||[],
+        cardCount:scan?.cardCount??null,extras:scan?.extras??null,extraTexts:scan?.extraTexts||null,conflicts:scan?.collisions||[],
         busy,waitingFor,reason,selectionCount:selection.filter(value=>value==='confirmed').length};
       return lastUploadState;
     };
