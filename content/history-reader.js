@@ -4,7 +4,7 @@
   async function read(expectedUrl){
     const url=new URL(location.href),id=/(?:^|\/)c\/([^/]+)\/?$/.exec(url.pathname)?.[1];
     if(!id||url.origin!==new URL(expectedUrl).origin||url.pathname!==new URL(expectedUrl).pathname)throw new Error('对话地址已变化');
-    if(cached?.id===id&&Date.now()-cached.at<1000)return cached.value;
+    if(cached?.id===id&&Date.now()-cached.at<5000)return cached.value;
     if(pending?.id===id)return pending.promise;
     if(Date.now()<blockedUntil)throw new Error('对话原文读取暂不可用，请稍后恢复');
     const promise=(async()=>{
