@@ -1,10 +1,10 @@
 import {RUN_ALARM} from './scheduler.mjs';
 import {reason as logReason, classify as logClassify} from '../shared/logging.mjs';
 
-export function createRunner({chrome, model: M, store: S, runs, connection, scheduler, native, fileMatch, clock: Date = globalThis.Date, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))}) {
+export function createRunner({chrome, model: M, store: S, runs, connection, scheduler, native, fileMatch, domExport, clock: Date = globalThis.Date, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))}) {
   const ALARM = RUN_ALARM;
   const {getRun, log, save, verificationReply} = runs;
-  const {status, matchTarget, rebind, tabState} = connection;
+  const {status, matchTarget, rebind, tabState, diagnostic} = connection;
   const {enqueue, arm, requestTick} = scheduler;
   async function pause(run, reason) {
     await releaseNative(run);
@@ -15,6 +15,15 @@ export function createRunner({chrome, model: M, store: S, runs, connection, sche
     run.lastFailure = {code:info.code, detail:String(info.detail||'').slice(0,300), cause:String(info.cause||'').slice(0,300), stage:run.phase, module:'runner', tabId:run.tabId, at:Date.now()};
     log(run, `Paused: ${logReason(raw)}`, text === '已手动暂停' ? 'info' : /^[A-Z][A-Z0-9_]+:/.test(text) ? 'error' : 'warn'); await save(run);
     chrome.tabs.sendMessage(run.tabId, {type: 'PF_CANCEL'}).catch(() => {});
+    // An unexpected pause is exactly when the DOM and logs are needed; write both
+    // next to each other so support needs one file instead of a screenshot.
+    if (text !== '已手动暂停' && domExport && Date.now() - (run.lastDomDumpAt || 0) > 20000) {
+      run.lastDomDumpAt = Date.now();
+      const snapshot = await status(run.tabId).catch(() => null);
+      let info = null;
+      try {info = diagnostic(run, snapshot);} catch {}
+      domExport.download(run.tabId, {reason: logReason(raw), logs: run.logs, diagnostic: info}).catch(() => {});
+    }
     return run;
   }
   async function acquireNative(run){

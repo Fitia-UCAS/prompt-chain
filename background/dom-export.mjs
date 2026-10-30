@@ -131,7 +131,7 @@ export function createDomExport({chrome, clock = Date}) {
     return {url: location.href, title: document.title, formPath: form ? path(form) : '',
       form: form ? form.outerHTML.slice(0, CAP) : '', names, buttons, readers, history};
   }
-  function render(value) {
+  function render(value, extra = {}) {
     const lines = ['Prompt Chain DOM diagnostic', 'at: ' + new Date(clock.now()).toISOString(),
       'url: ' + (value.url || ''), 'title: ' + (value.title || ''), 'scope: ' + (value.formPath || ''), '',
       '=== MESSAGE READER ===', JSON.stringify(value.readers || null, null, 1),
@@ -141,9 +141,16 @@ export function createDomExport({chrome, clock = Date}) {
     lines.push('', '=== BUTTONS ===');
     for (const item of value.buttons || []) lines.push(JSON.stringify(item));
     lines.push('', '=== COMPOSER HTML ===', value.form || '');
+    if (extra.reason) lines.push('', '=== PAUSE REASON ===', String(extra.reason));
+    if (extra.logs) {
+      const {format} = globalThis.PromptChainLogging || {};
+      lines.push('', '=== RUN LOG (last 120) ===');
+      for (const entry of extra.logs.slice(-120)) lines.push(format ? format(entry) : String(entry.text || entry));
+    }
+    if (extra.diagnostic) lines.push('', '=== DIAGNOSTICS ===', JSON.stringify(extra.diagnostic, null, 1));
     return lines.join('\n');
   }
-  async function download(tabId) {
+  async function download(tabId, extra = {}) {
     const tab = tabId ? await chrome.tabs.get(tabId).catch(() => null) : null;
     if (!tab) throw new Error('TARGET_TAB_UNAVAILABLE: 目标标签页不可用');
     let injected = null;
@@ -155,7 +162,7 @@ export function createDomExport({chrome, clock = Date}) {
     const value = injected?.result;
     if (!value) throw new Error('DOM_CAPTURE_FAILED: 页面没有返回内容');
     if (value.error) throw new Error('DOM_CAPTURE_FAILED: ' + value.error);
-    const text = render(value);
+    const text = render(value, extra);
     const stamp = new Date(clock.now()).toISOString().replace(/[:T]/g, '-').slice(0, 19);
     const filename = 'prompt-chain-dom-' + stamp + '.txt';
     await chrome.downloads.download({url: 'data:text/plain;charset=utf-8,' + encodeURIComponent(text), filename, saveAs: false});
