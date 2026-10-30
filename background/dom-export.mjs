@@ -45,6 +45,14 @@ export function createDomExport({chrome, clock = Date}) {
       const role = node.getAttribute('data-message-author-role');
       roleCounts[role] = (roleCounts[role] || 0) + 1;
     }
+    // Structure only: tag + testid + role attributes, no conversation text.
+    const skeleton = (root, limit) => [...(root ? root.querySelectorAll('*') : [])].slice(0, limit).map(node =>
+      node.tagName.toLowerCase() +
+      (node.getAttribute('data-testid') ? '[' + node.getAttribute('data-testid') + ']' : '') +
+      (node.getAttribute('data-message-author-role') ? '{' + node.getAttribute('data-message-author-role') + '}' : '') +
+      (node.getAttribute('role') ? '(' + node.getAttribute('role') + ')' : '')
+    ).join(' ');
+    const mainNode = document.querySelector('main');
     const readers = {
       roleCounts,
       turns: document.querySelectorAll('[data-testid^="conversation-turn"]').length,
@@ -52,6 +60,7 @@ export function createDomExport({chrome, clock = Date}) {
       messageIds: document.querySelectorAll('[data-message-id]').length,
       mainElements: document.querySelectorAll('main').length,
       mainText: ((document.querySelector('main') || document.body).innerText || '').length,
+      skeleton: skeleton(mainNode, 140),
       lastMessages: [...document.querySelectorAll('[data-message-author-role]')].slice(-4).map(node => ({
         role: node.getAttribute('data-message-author-role'), key: node.getAttribute('data-message-id') || '',
         text: (node.innerText || '').trim().slice(0, 120), html: node.outerHTML.slice(0, 900)
@@ -59,14 +68,21 @@ export function createDomExport({chrome, clock = Date}) {
     };
     const history = {};
     try {
+      const session = await fetch('/api/auth/session', {credentials: 'include', cache: 'no-store'});
+      const sessionBody = await session.json().catch(() => null);
+      const token = sessionBody?.accessToken || '';
+      history.session = {status: session.status, token: !!token};
       const match = /\/c\/([^/]+)\/?$/.exec(location.pathname);
       if (!match) history.error = 'no conversation id in the URL';
       else {
-        const response = await fetch('/backend-api/conversation/' + encodeURIComponent(match[1]), {credentials: 'include', cache: 'no-store'});
-        const body = await response.text();
-        history.status = response.status;
-        history.ok = response.ok;
-        history.bodyHead = body.slice(0, 200);
+        for (const withToken of [true, false]) {
+          const response = await fetch('/backend-api/conversation/' + encodeURIComponent(match[1]), {
+            credentials: 'include', cache: 'no-store', headers: withToken && token ? {authorization: 'Bearer ' + token} : {}
+          });
+          const body = await response.text();
+          if (withToken) {history.status = response.status; history.ok = response.ok; history.bodyHead = body.slice(0, 200);}
+          else {history.withoutToken = {status: response.status, bodyHead: body.slice(0, 120)};}
+        }
       }
     } catch (error) {history.error = String((error && error.message) || error);}
     return {url: location.href, title: document.title, formPath: form ? path(form) : '',

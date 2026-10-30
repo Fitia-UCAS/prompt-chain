@@ -247,6 +247,11 @@ const actions = {
   new:newFlow, back:async()=>{await persist();await syncNative();if(nativeHost){location.href=chrome.runtime.getURL('sidepanel.html');return;}switchView('library');displayLibrary();},
   'import-chat':()=>{$('chat-file').click();}, 'import-backup':()=>{$('backup-file').click();}, export:()=>downloadFlow(),'export-all':()=>downloadFlow(true),
   'delete-flow':()=>deleteFlow(editor?.id),trash:async()=>{await persist();trash=await S.readTrash();switchView('trash');displayTrash();},
+  'export-dom':async()=>{
+    const tabId=Number($('target').value)||runState?.tabId||0;
+    const result=await rpc('PF_EXPORT_DOM',tabId?{tabId}:{});
+    notice(`已导出页面 DOM：${result.filename}`,true);
+  },
   save:async()=>{await persist(true);await syncNative();},
   'add-step':async()=>{if(locked())throw new Error('请先停止流程再修改步骤'); editor.steps.push(M.step());displaySteps();await persist(); $('steps').lastElementChild.open=true;},
   'bind-folder':bindFolder,'match-files':matchFiles
