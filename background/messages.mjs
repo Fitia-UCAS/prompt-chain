@@ -1,4 +1,4 @@
-export function createMessageHandler({chrome, model: M, store: S, runs, connection, runner, native, upstream, clock: Date = globalThis.Date}) {
+export function createMessageHandler({chrome, model: M, store: S, runs, connection, runner, native, upstream, domExport, clock: Date = globalThis.Date}) {
   const {getRun, log, save} = runs;
   const {status, diagnostic} = connection;
   const {start, resume, pause} = runner;
@@ -11,6 +11,13 @@ export function createMessageHandler({chrome, model: M, store: S, runs, connecti
     if(message.type==='PF_CURRENT_REPLY'){
       if(!uiSender(sender))throw new Error('只能从侧边栏读取当前验证回答');
       return {view: runs.currentReply(await getRun())};
+    }
+    if(message.type==='PF_EXPORT_DOM'){
+      if(!uiSender(sender))throw new Error('只能从侧边栏导出页面诊断');
+      const run=await getRun();
+      const tabId=Number(message.tabId)||run?.tabId||0;
+      if(!tabId)throw new Error('先选择一个目标对话');
+      return domExport.download(tabId);
     }
     if(message.type==='PF_CONNECT'){
       if(!uiSender(sender))throw new Error('只能从侧边栏刷新连接');

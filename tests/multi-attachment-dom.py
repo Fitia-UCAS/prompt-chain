@@ -31,6 +31,11 @@ FIXTURES = {
 }
 
 results={}
+REAL=(ROOT/'tests/fixtures/chatgpt-real-attachments.html').read_text(encoding='utf-8')
+REAL_NAMES=['姜洛璃.md','苏浅浅.md','云溪.md']
+# The saved markup carries only utility class names, so give every candidate a size
+# for getBoundingClientRect(); the scanner itself only reads text and structure.
+REAL_CSS='<style>form span,form div,form p,form a{display:block;min-width:8px;min-height:8px}</style>'
 with sync_playwright() as p:
     browser=p.chromium.launch(executable_path=EXE,headless=True) if EXE else p.chromium.launch(headless=True)
     for label,(names,expected) in FIXTURES.items():
@@ -47,6 +52,22 @@ with sync_playwright() as p:
         }''',NAMES)
         results[label]={'expected':expected,'observed':result}
         page.close()
+    # Real ChatGPT markup captured from a live composer: three cards in one row,
+    # remove buttons always present but visually hidden (opacity-0).
+    page=browser.new_page()
+    page.set_content('<!doctype html><html><head>'+REAL_CSS+'</head><body>'+REAL+'</body></html>')
+    page.add_script_tag(content=(ROOT/'shared/platforms.js').read_text(encoding='utf-8'))
+    page.add_script_tag(content=(ROOT/'shared/model.js').read_text(encoding='utf-8'))
+    page.evaluate("window.PromptChainMessages={read:()=>({messages:[]})};PromptFlowModel.platforms.providerFor=()=> 'chatgpt'")
+    page.add_script_tag(content=(ROOT/'content/supervisor-engine.js').read_text(encoding='utf-8'))
+    real_result=page.evaluate('''names => {
+      const refs=names.map((name,i)=>({id:'f'+i,name,size:3,mimeType:'text/markdown'}));
+      const form=document.querySelector('form');
+      const scan=PromptFlowSupervisor.scanAttachmentSet(form,refs);
+      return {state:scan.state,cardCount:scan.cardCount,extras:scan.extras,files:scan.files.map(item=>({name:item.name,state:item.state,hits:item.hits}))};
+    }''',REAL_NAMES)
+    results['real_chatgpt_three_cards']={'expected':'match','observed':real_result}
+    page.close()
     browser.close()
 failed=[name for name,row in results.items() if row['observed']['state']!=row['expected']]
 print(json.dumps({'status':'PASS' if not failed else 'FAIL','cases':results},ensure_ascii=False,indent=2))

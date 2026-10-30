@@ -77,7 +77,9 @@
     });
   }
   const selectionOf=attempt=>attempt?(attempt.assigned===true?'confirmed':attempt.changed===true?'rejected':'unknown'):'unknown';
-  const aliasList=op=>(op.attachmentAliases||[]).map(name=>M.echoNorm(name)).filter(Boolean);
+  // Diagnostic only: the markup of the elements that carry a filename, so a
+  // failed set scan can be explained without DevTools.
+  const attachmentSamples=()=>{try{return E.attachmentNameSample?E.attachmentNameSample():null;}catch{return null;}};  const aliasList=op=>(op.attachmentAliases||[]).map(name=>M.echoNorm(name)).filter(Boolean);
   function evidenceOf(scan,selection,aliases){
     if(!scan)return{identity:'none',weak:false,selection};
     if(scan.state!=='match')return{identity:scan.state,weak:false,selection};
@@ -262,7 +264,7 @@
     if(inputList.some(input=>!input))throw new Error('UPLOAD_INPUT_NOT_UNIQUE: A unique input was not found for every attachment');
     const before=E.scanAttachmentSet(c,refs);
     snapshotDiagnostic('preflight',before,'checking existing cards',selection);
-    if(op.reuseAttachments){
+    if(op.reuseAttachments&&before.cardCount){
       if(before.state!=='match')throw new Error('UPLOAD_SET_INCOMPLETE: Cannot reuse incomplete attachment set; missing: '+before.files.filter(item=>item.state!=='match').map(item=>item.name).join('、'));
       selection.fill('confirmed');
       snapshotDiagnostic('ready',before,'ready (reused)',selection);
@@ -333,6 +335,7 @@
         observed||=Date.now();
         if(scan.state!=='match'&&Date.now()-observed>STALL_MS){
           const detail=scan.files.filter(item=>item.state!=='match').map(item=>item.name).join('、');
+          if(lastUploadState)lastUploadState.nameSamples=attachmentSamples();
           throw new Error('UPLOAD_SET_INCOMPLETE: Missing: '+detail+' ('+confirmed+'/'+refs.length+' confirmed, '+Math.round((Date.now()-observed)/1000)+'s without a new card)');
         }
       }else observed=0;
@@ -348,8 +351,11 @@
       const attachRoots=E.attachmentRoots(initialComposer).map(entry=>entry.root);
       const refs=Array.isArray(op.attachments)?op.attachments:(op.attachment?[op.attachment]:[]);
       const reported=refs.length===1?E.scanAttachment(initialComposer,refs[0]):null;
-      const existing=attachRoots.some(root=>attachmentsPresent(root))||!!reported?.cards?.length;
       const setBefore=refs.length>1?E.scanAttachmentSet(initialComposer,refs):null;
+      // For a multi-file step the set scan decides whether the composer is empty,
+      // reused as-is, or blocked; hover-only remove buttons make attachmentsPresent
+      // unreliable there.
+      const existing=refs.length>1?!!setBefore.cardCount:(attachRoots.some(root=>attachmentsPresent(root))||!!reported?.cards?.length);
       const prior=op.reuseAttachment&&op.attachment?(chatUploadAttempt&&chatUploadAttempt.fileId===op.attachment.id?chatUploadAttempt:{fileId:op.attachment.id,form:E.scope(initialComposer),assigned:null,changed:null,recovered:true}):null;
       op.previousUpload=lastUploadState?{operation:lastUploadState.operation||null,stage:lastUploadState.stage||null,elapsedMs:lastUploadState.elapsedMs||0,sampledAt:lastUploadState.sampledAt||0}:null;
       if(op.attachment)lastUploadState=buildDiagnostic(op,{stage:'preflight',scan:reported,timeline:{startedAt:Date.now()},attempt:prior,previous:op.previousUpload,observedNames:prior?.names});

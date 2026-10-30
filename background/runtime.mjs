@@ -3,6 +3,7 @@ import {createRunStore} from './run-store.mjs';
 import {createConnection} from './connection.mjs';
 import {createRunner} from './runner.mjs';
 import {createMessageHandler} from './messages.mjs';
+import {createDomExport} from './dom-export.mjs';
 
 export function createBackground({chrome, model, store, native, upstream, fileMatch, clock = Date, timers = globalThis}) {
   let runner;
@@ -10,7 +11,8 @@ export function createBackground({chrome, model, store, native, upstream, fileMa
   const runs = createRunStore({chrome, model, scheduler, clock});
   const connection = createConnection({chrome, model, runs, native, clock});
   runner = createRunner({chrome, model, store, runs, connection, scheduler, native, fileMatch, clock});
-  const handle = createMessageHandler({chrome, model, store, runs, connection, runner, native, upstream, clock});
+  const domExport = createDomExport({chrome, clock});
+  const handle = createMessageHandler({chrome, model, store, runs, connection, runner, native, upstream, clock, domExport});
   const listeners = [];
 
   function listen(event, listener) {

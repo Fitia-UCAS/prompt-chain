@@ -157,7 +157,26 @@ function attachmentSeeds(root){
     if(!/(?:^|\b)(?:remove|delete)\b|移除|删除/i.test(label))continue;
     seeds.push(button);
   }
+  // Some builds mark the remove control as hover-only and give cards no testid,
+  // so only the hovered attachment is discoverable through those two passes.
+  // Fall back to the deepest element that still carries a filename, which keeps
+  // every card of a row visible to the scanner.
+  for(const node of root.querySelectorAll('span,div,a,p,strong,li')){
+    if(!rendered(node)||node.closest(ATTACHMENT_EXCLUDED))continue;
+    if(node.isContentEditable||node.closest('[contenteditable="true"]'))continue;
+    const text=nameNorm(cardText(node));
+    if(!nameCarrier(text,node))continue;
+    seeds.push(node);
+  }
   return seeds;
+}
+function nameCarrier(text,node){
+  if(text.length<4||text.length>160||!KNOWN_EXTENSION.test(text))return false;
+  for(const child of node.children){
+    const value=nameNorm(cardText(child));
+    if(value.length>=4&&value.length<text.length&&KNOWN_EXTENSION.test(value))return false;
+  }
+  return true;
 }
 function cardText(card){
   const clone=card.cloneNode(true);
@@ -207,7 +226,7 @@ function fileTokens(text){
 }
 function tokenIsOurs(token,spec){
   const text=nameNorm(token);
-  if(text===spec.full)return true;
+  if(text===spec.full||text.endsWith(spec.full))return true;
   const stripped=text.replace(/(?:…|\.{3})/g,'').trim(),cut=fileParts(stripped);
   if(cut.ext!==spec.ext)return false;
   if(cut.stem===spec.stem)return true;
@@ -273,8 +292,8 @@ function scanAttachment(c,ref){
       const label=(seed.getAttribute('aria-label')||'')+' '+(seed.getAttribute('title')||'');
       const control=seed.tagName==='BUTTON'||seed.getAttribute('role')==='button'||/(?:remove|delete|移除|删除)/i.test(label);
       const card=cardForSeed(seed,entry.root,control);
-      if(!card||cards.some(item=>item.node===card||item.node.contains(card)))continue;
-      const replaced=cards.find(item=>card.contains(item.node));
+      if(!card||cards.some(item=>item.node===card||card.contains(item.node)))continue;
+      const replaced=cards.find(item=>item.node.contains(card));
       if(replaced)cards.splice(cards.indexOf(replaced),1);
       cards.push({...judgeCard(card,spec),kind:entry.kind});
     }
@@ -307,8 +326,8 @@ function scanAttachmentSet(c,refs){
       const label=(seed.getAttribute('aria-label')||'')+' '+(seed.getAttribute('title')||'');
       const control=seed.tagName==='BUTTON'||seed.getAttribute('role')==='button'||/(?:remove|delete|移除|删除)/i.test(label);
       const node=cardForSeed(seed,entry.root,control);
-      if(!node||cards.some(other=>other===node||other.contains(node)))continue;
-      const replaced=cards.find(other=>node.contains(other));if(replaced)cards.splice(cards.indexOf(replaced),1);
+      if(!node||cards.some(other=>other===node||node.contains(other)))continue;
+      const replaced=cards.find(other=>other.contains(node));if(replaced)cards.splice(cards.indexOf(replaced),1);
       cards.push(node);
     }
     // Wrapper-level scans may rediscover the same preview under a larger ancestor.
@@ -319,16 +338,21 @@ function scanAttachmentSet(c,refs){
       all.push(node);
     }
   }
-  const assigned=new Set(),files=refs.map(ref=>{
-    const hits=all.map((node,index)=>({node,index,judgement:judgeCard(node,nameSpec(ref))})).filter(entry=>entry.judgement.state==='match');
-    const strong=hits.filter(hit=>hit.judgement.strength==='strong');
-    const chosen=strong.length===1?strong[0]:hits.length===1?hits[0]:null;
+  const judgements=all.map(node=>refs.map(ref=>judgeCard(node,nameSpec(ref))));
+  const assigned=new Set(),files=refs.map((ref,refIndex)=>{
+    const hits=all.map((node,index)=>({node,index,judgement:judgements[index][refIndex]})).filter(entry=>entry.judgement.state==='match');
+    // A row wrapper and the name element below it must count as one card, not two.
+    const innermost=hits.filter(hit=>!hits.some(other=>other!==hit&&hit.node.contains(other.node)));
+    const strong=innermost.filter(hit=>hit.judgement.strength==='strong');
+    const chosen=strong.length===1?strong[0]:innermost.length===1?innermost[0]:null;
     if(chosen)assigned.add(chosen.index);
-    return {id:ref.id,name:ref.name,size:ref.size,state:!hits.length?'missing':chosen?'match':'ambiguous',strength:chosen?.judgement.strength||'none',alias:chosen?.judgement.alias||'',index:chosen?.index??-1,hits:hits.length};
+    return {id:ref.id,name:ref.name,size:ref.size,state:!innermost.length?'missing':chosen?'match':'ambiguous',strength:chosen?.judgement.strength||'none',alias:chosen?.judgement.alias||'',index:chosen?.index??-1,hits:innermost.length};
   });
   const occupied=new Set(),collisions=[];
   for(const item of files)if(item.index>=0){if(occupied.has(item.index))collisions.push(item.name);occupied.add(item.index);}
-  const extras=all.map((node,index)=>index).filter(index=>!assigned.has(index));
+  // Only cards that match no expected file are extras; a duplicate wrapper for one
+  // of our own files must not abort the batch.
+  const extras=all.map((node,index)=>index).filter(index=>!assigned.has(index)&&!judgements[index].some(item=>item.state==='match'));
   const state=collisions.length||files.some(item=>item.state==='ambiguous')||extras.length?'conflict':files.some(item=>item.state!=='match')?'missing':'match';
   return {state,files,cardCount:all.length,extras:extras.length,collisions,roots:roots.map(item=>({kind:item.kind,tag:item.root.tagName})),nodes:all};
 }
@@ -336,6 +360,22 @@ function attachmentCardCount(root){
   if(!root||!root.querySelectorAll)return null;
   const seeds=attachmentSeeds(root);
   return seeds.length||null;
+}
+// Diagnostic only: shows which elements carry a filename when the scanner cannot
+// map them to the expected attachment set.
+function attachmentNameSample(c=composer(),limit=4){
+  const samples=[];
+  for(const entry of attachmentRoots(c)){
+    for(const node of entry.root.querySelectorAll('span,div,a,p,strong,li')){
+      if(samples.length>=limit)return samples;
+      if(!rendered(node)||node.closest(ATTACHMENT_EXCLUDED))continue;
+      if(node.isContentEditable||node.closest('[contenteditable="true"]'))continue;
+      const text=nameNorm(cardText(node));
+      if(!nameCarrier(text,node))continue;
+      samples.push({path:nodePath(node),text:text.slice(0,80),html:node.outerHTML.slice(0,300)});
+    }
+  }
+  return samples;
 }
 function describe(root) {
   return root ? [root.innerText || '', ...[...root.querySelectorAll('span,div')].filter(node=>!node.children.length).map(node=>node.textContent||''), ...Array.from(root.querySelectorAll('[aria-label],[title],[alt]')).map(n => (n.getAttribute('aria-label') || '')+' '+(n.getAttribute('title') || '')+' '+(n.getAttribute('alt') || ''))].join('\n') : '';
@@ -353,5 +393,5 @@ function snapshot() {
     messages:all.slice(-200).map(({key,role,fingerprint})=>({key,role,fingerprint})),reader:{version:R.version,strategy:scan.strategy,probe:scan.probe,count:all.length,users:all.filter(message=>message.role==='user').length,assistants:all.filter(message=>message.role==='assistant').length},error};
 }
 
-globalThis.PromptFlowSupervisor=Object.assign(globalThis.PromptFlowSupervisor||{},{msgs,messageRole,key,text,composer,ctext,fill,sendBtn,generating,assistantReplySettled,snapshot,scope,describe,rendered,sleep,readerVersion:7,engineVersion:10,attachmentRoots,attachmentSeeds,scanAttachment,scanAttachmentSet,attachmentCardCount});
+globalThis.PromptFlowSupervisor=Object.assign(globalThis.PromptFlowSupervisor||{},{msgs,messageRole,key,text,composer,ctext,fill,sendBtn,generating,assistantReplySettled,snapshot,scope,describe,rendered,sleep,readerVersion:7,engineVersion:10,attachmentRoots,attachmentSeeds,scanAttachment,scanAttachmentSet,attachmentCardCount,attachmentNameSample});
 })();

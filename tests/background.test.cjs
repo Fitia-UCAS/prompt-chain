@@ -8,7 +8,7 @@ const url='https://chatgpt.com/c/fixture';
 let createBackground;
 before(async () => {({createBackground} = await import('../background/runtime.mjs'));});
 function harness(shared={},initial={}) {
-  const events={},sends=[],deliveries=[];let now=10000;
+  const events={},sends=[],deliveries=[],downloads=[];let now=10000;
   let snapshot={url,hasComposer:true,draft:'',generating:false,lastRole:'assistant',lastUser:{key:'old-u',text:'旧消息',filesText:''},assistant:{key:'old-a',text:'旧回答',signature:'old-a|旧回答'},documentId:'doc1',operation:null,...initial};
   const closedTabs=new Set(),extraTabs=[];
   const event=name=>({addListener(fn){events[name]=fn;}});
@@ -22,7 +22,10 @@ function harness(shared={},initial={}) {
         if(message.type==='PF_STATUS')return{ok:true,snapshot:structuredClone(snapshot)};
         if(message.type==='PF_CANCEL')return{ok:true};
         if(message.type==='PF_SEND'){sends.push(message.operation);return new Promise(resolve=>deliveries.push(resolve));}
-      }},scripting:{async executeScript(){}}
+      }},scripting:{async executeScript(options){
+        if(options?.files||options?.args)return[{}];
+        return[{result:{url:snapshot.url,title:'fixture',formPath:'form.composer',form:'<form>composer</form>',names:[{text:'设定.md'}],buttons:[]}}];
+      }},downloads:{async download(options){downloads.push(options);return downloads.length;}}
   };
   class Clock extends Date {static now(){return now;}}
   const context=vm.createContext({console,chrome,crypto:globalThis.crypto,URL,Date:Clock,structuredClone,TextEncoder,TextDecoder,btoa,atob,setTimeout(){return 1;},clearTimeout(){}});
@@ -31,7 +34,7 @@ function harness(shared={},initial={}) {
   const background=createBackground({chrome,model:context.PromptFlowModel,store:context.PromptFlowStore,clock:Clock,timers:{setTimeout(){return 1;},clearTimeout(){}}});
   async function drain(){for(let i=0;i<4;i++){await background.scheduler.idle();await new Promise(resolve=>setImmediate(resolve));}}
   async function message(type,extra={},content=false){return new Promise(resolve=>events.message({type,...extra},content?{tab:{id:4},url}:{url:'chrome-extension://fixture/sidepanel.html'},resolve));}
-  return {shared,sends,deliveries,drain,message,history:background.connection.historySnapshot,setSnapshot(next){snapshot={...snapshot,...next}},advance(ms){now+=ms},async beat(){await message('PF_HEARTBEAT',{},true);await drain();},
+  return {shared,sends,deliveries,downloads,drain,message,history:background.connection.historySnapshot,setSnapshot(next){snapshot={...snapshot,...next}},advance(ms){now+=ms},async beat(){await message('PF_HEARTBEAT',{},true);await drain();},
     closeTab(id){closedTabs.add(id);},openTab(tab){extraTabs.push(tab);}};
 }
 
@@ -74,6 +77,20 @@ test('编辑器尚未就绪时只记一次等待并持续重试，就绪后自�
   assert.equal(h.sends.length,1);
   assert.equal(h.sends[0].text,'消息一');
   assert.ok(h.shared.pfRun.logs.some(item=>item.text==='Preparing step 1/1'));
+});
+
+test('导出页面 DOM 只允许面板触发，并下载不含对话内容的诊断文本',async()=>{
+  const h=harness({},{});await h.drain();
+  const denied=await h.message('PF_EXPORT_DOM',{tabId:4},true);
+  assert.equal(denied.ok,false);
+  assert.equal(h.downloads.length,0);
+  const result=await h.message('PF_EXPORT_DOM',{tabId:4});
+  assert.equal(result.ok,true,result.error);
+  assert.match(h.downloads[0].filename,/^prompt-chain-dom-[\d-]+\.txt$/);
+  const text=decodeURIComponent(h.downloads[0].url.split(',')[1]);
+  assert.match(text,/=== FILENAME ELEMENTS ===/);
+  assert.match(text,/=== COMPOSER HTML ===/);
+  assert.match(text,/设定\.md/);
 });
 
 test('清空日志只允许侧栏，不修改运行位置或发送意图',async()=>{
