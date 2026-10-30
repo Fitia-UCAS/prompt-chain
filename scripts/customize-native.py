@@ -109,3 +109,25 @@ if not (root/'onboarding.html').exists():raise RuntimeError('Missing maintained 
 p=root/'assets/native-panel.js';p.write_text(patch_popup(p.read_text(encoding='utf-8')),encoding='utf-8')
 p=root/'assets/site-runtime.js';p.write_text(patch_adapter(p.read_text(encoding='utf-8')),encoding='utf-8')
 patch_platform_assets(root)
+
+# Upstream ships -webkit-* only. Add the standard properties so the copied
+# build keeps the editor free of vendorPrefix diagnostics; every replacement is
+# a no-op when the pattern is absent or already patched.
+def patch_css_compat():
+ fixes={
+  'assets/onboarding.css':[('-webkit-line-clamp:2}','-webkit-line-clamp:2;line-clamp:2}')],
+  'assets/ui.css':[
+   ('input:where([type=submit]){-webkit-appearance:button;','input:where([type=submit]){-webkit-appearance:button;appearance:button;'),
+   ('[type=search]{-webkit-appearance:textfield;','[type=search]{-webkit-appearance:textfield;appearance:textfield;'),
+   ('object{display:block;vertical-align:middle}','object{display:block}'),
+   ('-webkit-box-orient:vertical;-webkit-line-clamp:2}','-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}'),
+  ],
+ }
+ for name,pairs in fixes.items():
+  p=root/name
+  if not p.exists():raise RuntimeError('Missing '+name)
+  s=p.read_text(encoding='utf-8')
+  for old,new in pairs:
+   if old in s and new not in s:s=s.replace(old,new)
+  p.write_text(s,encoding='utf-8')
+patch_css_compat()
