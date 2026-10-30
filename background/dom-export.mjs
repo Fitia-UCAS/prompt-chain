@@ -75,7 +75,26 @@ export function createDomExport({chrome, clock = Date}) {
         }
         return {chain: chain.join(' < '), attrs: [...node.attributes].map(attr => attr.name).join(',')};
       });
+    const answerNodes = [...document.querySelectorAll('[class*="MarkdownRoot"]')].slice(0, 5).map(node => ({
+      textLength: (node.textContent || '').length,
+      innerTextLength: (node.innerText || '').length,
+      roleAncestor: (() => {for (let parent = node; parent && parent !== document.body; parent = parent.parentElement) {const value = parent.getAttribute('data-conversation-role'); if (value) return value;} return '';})(),
+      turnKey: node.closest('[data-turn-key]')?.getAttribute('data-turn-key') || '',
+      hiddenAncestor: !!node.closest('[hidden],[aria-hidden="true"]'),
+      parent: node.parentElement ? node.parentElement.tagName.toLowerCase() + '.' + (node.parentElement.className || '').split(/\s+/)[0] : ''
+    }));
+    let selfTest = null;
+    try {
+      if (!globalThis.PromptChainMessages) selfTest = {error: 'PromptChainMessages missing'};
+      else {
+        const value = globalThis.PromptChainMessages.read();
+        selfTest = {strategy: value.strategy, probe: value.probe,
+          messages: (value.messages || []).map(item => ({role: item.role, key: item.key, textLength: (item.text || '').length, textHead: (item.text || '').slice(0, 40)}))};
+      }
+    } catch (error) {selfTest = {error: String((error && error.message) || error)};}
     const readers = {
+      selfTest,
+      answerNodes,
       inventory,
       textChains,
       roleCounts,
