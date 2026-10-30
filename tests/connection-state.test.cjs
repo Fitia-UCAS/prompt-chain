@@ -60,3 +60,16 @@ test('没有活动流程时选用当前可用聊天页', async () => {
   assert.equal(state.ready, true);
   assert.equal(state.tab.id, 8);
 });
+
+test('项目页同样显示绿灯，并保留项目范围', async () => {
+  const project = {id: 6, url: 'https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b/project', active: true};
+  const inside = {id: 7, url: 'https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b/c/one', active: true};
+  harness({tabs: [project], snapshots: {6: {url: project.url, hasComposer: true}}});
+  const state = await connect();
+  assert.equal(state.ready, true);
+  assert.equal(state.tab.id, 6);
+  harness({tabs: [inside], snapshots: {7: {url: inside.url, hasComposer: true}}});
+  const conversation = await connect();
+  assert.equal(conversation.ready, true);
+  assert.equal(conversation.tab.id, 7);
+});

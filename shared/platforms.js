@@ -9,6 +9,11 @@
     const provider = providerFor(value); if (!provider) return null;
     const url = new URL(value), path = url.pathname.replace(/\/$/, '');
     if (provider === 'chatgpt') {
+      // A project page (/g/g-p-…/project) owns the same composer as a new chat.
+      // Its conversations live under the shared /g/g-p-…/ scope, so a flow may
+      // start there and then resolve into /g/g-p-…/c/<id>.
+      const project = /^(\/g\/[^/]+)\/project$/.exec(path);
+      if (project) return {provider, origin: url.origin, scope: project[1] + '/', id: ''};
       const match = /^(\/(?:g\/[^/]+\/)?)(?:c|uc)\/([^/]+)$/.exec(path);
       if (match) return {provider, origin: url.origin, scope: match[1], id: temporaryScope(value) ? '' : match[2]};
       if (path === '' || /^\/g\/[^/]+$/.test(path)) return {provider, origin: url.origin, scope: path ? path + '/' : '/', id: ''};
@@ -28,7 +33,7 @@
       const a = route(expected), b = route(actual);
       if (!a || !b || a.origin !== b.origin || a.scope !== b.scope) return false;
       if (a.id || b.id) return a.id === b.id || !!(allowNew && !a.id && b.id);
-      return new URL(expected).pathname === new URL(actual).pathname || !!(allowNew && temporaryScope(actual));
+      return new URL(expected).pathname.replace(/\/$/,'') === new URL(actual).pathname.replace(/\/$/,'') || !!(allowNew && temporaryScope(actual));
     } catch {return false;}
   }
   const api = {names, providerFor, route, sameChat, temporaryScope, conversationPath: value => !!route(value)?.id, chatPage: value => !!route(value)};

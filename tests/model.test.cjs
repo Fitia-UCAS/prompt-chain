@@ -105,6 +105,20 @@ test('ChatGPT 临时 local-chatgpt 地址可确认升级，正式对话和其他
   assert.equal(M.sameChat(local,'https://chatgpt.com/g/other/c/one',true),false);
   assert.equal(M.sameChat(url,local,true),false);
 });
+test('ChatGPT 项目页可作为新聊天入口，并与项目内对话共用范围',()=>{
+  const project='https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b/project';
+  const inside='https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b/c/one';
+  assert.equal(M.platforms.chatPage(project),true);
+  assert.equal(M.conversationPath(project),false);
+  assert.equal(M.sameChat(project,project),true);
+  assert.equal(M.sameChat(project,project+'/',true),true);
+  assert.equal(M.sameChat(project,inside),false);
+  assert.equal(M.sameChat(project,inside,true),true);
+  assert.equal(M.sameChat(project,'https://chatgpt.com/g/g-p-other/project',true),false);
+  assert.equal(M.sameChat(project,'https://chatgpt.com/',true),false);
+  assert.equal(M.sameChat('https://chatgpt.com/',project,true),false);
+  assert.equal(M.sameChat('https://chatgpt.com/g/g-custom',project,true),false);
+});
 test('送达必须是新用户消息并匹配原文与附件名',()=>{
   const pending={baselineUserKey:'u1',text:'请阅读',attachment:{name:'原文.md'}};
   const snapshot={lastUser:{key:'u2',text:'请阅读',filesText:'原文.md'}};
