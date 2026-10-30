@@ -90,20 +90,22 @@
     const result=[...new Set([raw,plain].flatMap(text=>[semanticText(text),comparison(text).replace(/\s+/g,' ').trim()]).filter(Boolean))];projected.set(raw,result);if(projected.size>8)projected.delete(projected.keys().next().value);return result;
   }
   function deliveryWindow(snapshot,pending){
-    if(!Array.isArray(pending.baselineMessages))return true;
-    if(!pending.attemptedAt&&!pending.attempted)return false;
+    if(!Array.isArray(pending.baselineMessages))return {ok:true};
+    if(!pending.attemptedAt&&!pending.attempted)return {ok:false};
     const messages=snapshot.messages||[],before=pending.baselineMessages,userIndex=messages.findIndex(message=>message.key===snapshot.lastUser?.key);
-    if(userIndex<0)return false;
-    if(!before.length)return messages.slice(0,userIndex+1).filter(message=>message.role==='user').length===1;
-    if(before.some(message=>message.key===snapshot.lastUser.key))return false;
+    // A refreshed page may render only part of the history; report that so the
+    // caller can fall back to the exact text of the newest user message.
+    if(userIndex<0)return {ok:false,anchorMissing:true};
+    if(!before.length)return {ok:messages.slice(0,userIndex+1).filter(message=>message.role==='user').length===1};
+    if(before.some(message=>message.key===snapshot.lastUser.key))return {ok:false};
     const same=(a,b)=>a.role===b.role&&(a.key===b.key||[a.fingerprint,...(a.fingerprintAliases||[])].some(hash=>hash&&[b.fingerprint,...(b.fingerprintAliases||[])].includes(hash)));
     const anchor=before.at(-1),byKey=messages.findIndex(message=>message.role===anchor.role&&message.key===anchor.key);
     let anchors=byKey>=0?[byKey]:messages.map((message,index)=>same(anchor,message)?index:-1).filter(index=>index>=0);
     const ordinal=/^dom:(user|assistant):([a-z0-9]+):(\d+)$/.exec(anchor.key||'');
     if(byKey<0&&ordinal&&ordinal[1]===anchor.role&&ordinal[2]===anchor.fingerprint)anchors=anchors[Number(ordinal[3])-1]===undefined?[]:[anchors[Number(ordinal[3])-1]];
     if(anchors.length>1)anchors=anchors.filter(index=>{const context=before.slice(-Math.min(8,index+1,before.length));return context.length>=2&&context.every((message,offset)=>same(message,messages[index-context.length+1+offset]));});
-    if(anchors.length!==1||userIndex<=anchors[0])return false;
-    return messages.slice(anchors[0]+1).filter(message=>message.role==='user').length===1;
+    if(anchors.length!==1||userIndex<=anchors[0])return {ok:false,anchorMissing:anchors.length===0};
+    return {ok:messages.slice(anchors[0]+1).filter(message=>message.role==='user').length===1};
   }
   function receiptText(snapshot, pending) {
     if (!pending.text) return {matched: true, mode: 'attachment-only'};
@@ -142,8 +144,12 @@
     }
     const user = snapshot?.lastUser;
     if (!user || user.key === pending.baselineUserKey) return false;
-    if(!deliveryWindow(snapshot,pending))return false;
-    if(!receiptText(snapshot,pending).matched)return false;
+    const window=deliveryWindow(snapshot,pending),text=receiptText(snapshot,pending);
+    // When a refreshed page renders only part of the history the baseline anchor
+    // is gone. The newest user message still proves delivery if its text matches
+    // and the user explicitly resumed after being asked to check the conversation.
+    if(!window.ok&&!(window.anchorMissing&&text.matched&&pending.userConfirmed))return false;
+    if(!text.matched)return false;
     const refs=pending.attachments?.length?pending.attachments:(pending.attachment?[pending.attachment]:[]);
     const aliases=pending.attachmentAliasMap||{};
     for(const ref of refs){

@@ -1,11 +1,11 @@
 (() => {
   if(globalThis.PromptChainMessages?.version===7)return;
   const M=PromptFlowModel;
-  const ATTRS=['data-message-author-role','data-message-role','data-turn-role','data-author-role','data-turn','data-author','data-role'];
+  const ATTRS=['data-message-author-role','data-message-role','data-turn-role','data-author-role','data-conversation-role','data-turn','data-author','data-role'];
   const MARKED=ATTRS.map(name=>'['+name+']').join(',');
   const USER='[data-user-message-bubble],[data-user-message-copy],[data-testid="user-message"],[class*="user-message-bubble"]';
-  const ASSISTANT='[data-assistant-markdown],[data-assistant-markdown-root],[data-markdown-copy-text],[data-testid="assistant-message"],.markdown,.prose';
-  const TURNS='article,[data-testid^="conversation-turn-"],[data-turn-id],[data-message-id]';
+  const ASSISTANT='[data-assistant-markdown],[data-assistant-markdown-root],[data-markdown-copy-text],[data-testid="assistant-message"],[class*="MarkdownRoot"],[class*="markdown-root"],.markdown,.prose';
+  const TURNS='article,[data-testid^="conversation-turn-"],[data-turn-id],[data-turn-key],[data-message-id]';
   const ANSWER_ACTIONS='button[data-testid="copy-turn-action-button"],button[data-testid="good-response-turn-action-button"],button[data-testid="bad-response-turn-action-button"]';
   const LABEL=/^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]?\s*$/i;
   const HEADINGS='h1,h2,h3,h4,h5,h6,[role="heading"],[data-conversation-role],.sr-only';
@@ -129,7 +129,7 @@
       if(kind==='assistant'&&!text)continue;
       const fingerprint=M.fingerprint(kind+'\n'+text),occurrence=(occurrences.get(fingerprint)||0)+1;occurrences.set(fingerprint,occurrence);
       const testId=node.getAttribute('data-testid')||'';
-      const native=node.getAttribute('data-message-id')||node.querySelector('[data-message-id]')?.getAttribute('data-message-id')||(kind==='assistant'?node.closest('[data-message-id]')?.getAttribute('data-message-id'):'')||node.getAttribute('data-turn-id')||(/^conversation-turn-.+/.test(testId)?testId:'');
+      const native=node.getAttribute('data-message-id')||node.querySelector('[data-message-id]')?.getAttribute('data-message-id')||(kind==='assistant'?node.closest('[data-message-id]')?.getAttribute('data-message-id'):'')||node.getAttribute('data-turn-id')||node.getAttribute('data-turn-key')||(/^conversation-turn-.+/.test(testId)?testId:'');
       const key=native?'m:'+native:'dom:'+kind+':'+fingerprint+':'+occurrence;
       const folded=[...node.querySelectorAll('button,[role="button"]')].some(el=>[el.textContent,el.getAttribute('aria-label')].some(value=>/^(展开|展开更多|显示更多|显示全文|查看更多|Expand|Show more|Read more)(?:\s*(?:消息|内容|message|text))?$/i.test(clean(value))))||body(node,kind).getAttribute('data-collapsed')==='true';
       if(messages.some(message=>message.key===key))continue;

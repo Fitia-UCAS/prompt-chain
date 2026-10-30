@@ -30,7 +30,7 @@ document.querySelector('[data-testid="fruitjuice-send-button"]').onclick=()=>{
 results=[]
 with sync_playwright() as p:
  browser=p.chromium.launch(executable_path=str(EDGE),headless=True)
- for mode in ['bare','bare_user','h2','ids','actions','shadow','project','attribute','rich','folded','attachment','image','busy']:
+ for mode in ['bare','bare_user','h2','ids','actions','shadow','project','attribute','rich','folded','attachment','image','busy','turns']:
   page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.route('https://chatgpt.com/**',lambda route:route.fulfill(status=200,content_type='text/html',body=HTML))
   page.goto('https://chatgpt.com/c/message-reader')
@@ -43,6 +43,8 @@ with sync_playwright() as p:
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-message-id="old-user"><div data-user-message-bubble>历史问题</div></div><div data-message-id="old-answer"><div>历史回答</div></div>'}''')
   if mode=='actions':
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<section><div data-user-message-bubble>历史问题</div></section><section><div>历史回答</div><div><button data-testid="copy-turn-action-button">复制</button><button data-testid="good-response-turn-action-button">好评</button></div></section>'}''')
+  if mode=='turns':
+   page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-turn-key="t1"><div data-conversation-role="user"><div data-user-message-bubble>历史问题</div></div></div><div data-turn-key="t2"><div data-conversation-role="assistant"><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">历史回答</p></div></div></div></div>'}''')
   if mode=='shadow':
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<div id="conversation-shadow"></div>';document.querySelector('#conversation-shadow').attachShadow({mode:'open'}).innerHTML='<section><div data-user-message-bubble>历史问题</div></section><section><div class="markdown prose">历史回答</div></section>'}''')
   for file in ['vendor/marked/marked.min.js','shared/platforms.js','shared/model.js','content/message-reader.js','content/supervisor-engine.js','content/bridge.js']:page.add_script_tag(path=str(ROOT/file))

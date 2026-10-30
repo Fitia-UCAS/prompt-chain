@@ -226,6 +226,9 @@ export function createRunner({chrome, model: M, store: S, runs, connection, sche
     }
     if (!matchTarget(run,snapshot)) throw new Error('请回到流程锁定的原对话');
     if (snapshot.operation) throw new Error('页面正在结束上一个操作，请稍后再恢复');
+    // A manual resume means the user checked the conversation; let a partial DOM
+    // still accept the delivery when the newest user message matches exactly.
+    if(run.delivery){run.delivery.userConfirmed=true;await save(run);}
     if (run.pending && M.receipt(snapshot, run.pending)) {persistAttachmentUpload(run,snapshot.upload,run.pending.id);adoptReceipt(run, snapshot); retry = false;}
     else if (run.pending) {
       if (run.pending.attemptedAt) {

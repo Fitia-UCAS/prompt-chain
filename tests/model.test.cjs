@@ -63,6 +63,7 @@ test('折叠预览必须有足够正文、明确折叠标记和发送前消息�
   assert.equal(M.receipt({...snapshot,lastUser:{...user,folded:false}},pending),false);
   assert.equal(M.receipt({...snapshot,lastUser:{...user,text:text.slice(0,30)+'…'}},pending),false);
   assert.equal(M.receipt({...snapshot,messages:snapshot.messages.slice(2)},pending),false);
+  assert.equal(M.receipt({...snapshot,messages:snapshot.messages.slice(2)}, {...pending,userConfirmed:true}),true,'用户核对后恢复可接受被截断的历史');
   assert.equal(M.receipt({...snapshot,messages:[...snapshot.messages,{key:'other',role:'user'}]},pending),false);
   assert.equal(M.receipt({...snapshot,lastUser:{...user,key:'u0'}},pending),false);
   assert.equal(M.receipt(snapshot,{...pending,attemptedAt:0}),false);
