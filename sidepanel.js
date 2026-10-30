@@ -27,10 +27,9 @@ const UI_ERRORS = [
 const task = action => async event => {try {await action(event);} catch (error) {const known=UI_ERRORS.find(([pattern])=>pattern.test(error.message));notice(known?known[1]:error.message);}};
 function switchView(next) {
   view = next;
-  for (const name of ['library', 'editor', 'monitor','trash']) {$(name + '-view').hidden = name !== next;}
-  $('delete-flow-menu').hidden=$('export-flow-menu').hidden=next!=='editor';
+  for (const name of ['library', 'editor', 'monitor','trash','settings']) {$(name + '-view').hidden = name !== next;}
   $('library-actions').hidden = next !== 'library'; $('editor-actions').hidden = next !== 'editor'; $('monitor-footer').hidden = next !== 'monitor';
-  $('main').scrollTop = 0; $('menu').hidden = true;
+  $('main').scrollTop = 0;
   if(next==='monitor'){displayRun(true);syncReply();}
   else{$('last-reply').textContent='';currentReply=null;}
 }
@@ -246,6 +245,7 @@ async function downloadFlow(all=false) {
 const actions = {
   new:newFlow, back:async()=>{await persist();await syncNative();if(nativeHost){location.href=chrome.runtime.getURL('sidepanel.html');return;}switchView('library');displayLibrary();},
   'import-chat':()=>{$('chat-file').click();}, 'import-backup':()=>{$('backup-file').click();}, export:()=>downloadFlow(),'export-all':()=>downloadFlow(true),
+  monitor:async()=>{if(!runState)throw new Error('还没有执行记录');switchView('monitor');},
   'delete-flow':()=>deleteFlow(editor?.id),trash:async()=>{await persist();trash=await S.readTrash();switchView('trash');displayTrash();},
   'export-dom':async()=>{
     const tabId=Number($('target').value)||runState?.tabId||0;
@@ -260,7 +260,7 @@ document.addEventListener('click',task(async event=>{
   const deletion=event.target.closest('[data-flow-delete]');if(deletion){await deleteFlow(deletion.dataset.flowDelete);return;}
   const restoration=event.target.closest('[data-restore-flow]');if(restoration){await restoreDeleted(restoration.dataset.restoreFlow);return;}
   const purge=event.target.closest('[data-purge-flow]');if(purge){await purgeDeleted(purge.dataset.purgeFlow);return;}
-  const action=event.target.closest('[data-action]'); if(action){await actions[action.dataset.action]?.();$('menu').hidden=true;return;}
+  const action=event.target.closest('[data-action]'); if(action){await actions[action.dataset.action]?.();return;}
   const card=event.target.closest('[data-flow]');if(card){await openFlow(card.dataset.flow);return;}
   const button=event.target.closest('[data-step-action]');if(!button)return;
   if(locked())throw new Error('请先停止流程再修改步骤');
@@ -300,10 +300,13 @@ $('flow-title').addEventListener('input',()=>{if(!editor||locked())return;editor
 $('search').addEventListener('input',displayLibrary);$('sort').addEventListener('change',displayLibrary);
 $('home').onclick=task(actions.back);$('export-dom').innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${PromptChainIcons.dom}"/></svg>`;
 $('export-dom').onclick=task(async()=>{await actions['export-dom']();});
-$('menu-toggle').onclick=()=>{$('menu').hidden=!$('menu').hidden;};
-document.addEventListener('pointerdown',event=>{if(!event.target.closest('#menu,#menu-toggle'))$('menu').hidden=true;});
-document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('menu').hidden){$('menu').hidden=true;$('menu-toggle').focus();}});
-window.addEventListener('blur',()=>{$('menu').hidden=true;});
+$('menu-toggle').onclick=()=>switchView('settings');
+$('settings-view').querySelectorAll('.settings-row .icon-button').forEach(button=>button.innerHTML=icon({'export-all':'export',monitor:'logs',trash:'trash','export-dom':'dom'}[button.dataset.action]||'file'));
+// Any stray child that is not part of the header spec is removed, so both
+// surfaces always expose exactly the same controls.
+const HEADER_IDS=new Set(['home','connection','refresh-connection','export-dom','menu-toggle']);
+const cleanHeader=()=>{const header=document.querySelector('.app-header');if(!header)return;for(const node of [...header.children])if(!HEADER_IDS.has(node.id))node.remove();};
+cleanHeader();new MutationObserver(cleanHeader).observe(document.querySelector('.app-header'),{childList:true});
 $('empty-trash').onclick=task(emptyTrash);
 $('target').onchange=task(updateConnection);
 $('refresh-connection').onclick=task(async()=>{await refreshTabs();const tabId=Number($('target').value);if(tabId)await rpc('PF_CONNECT',{tabId});await updateConnection();});
