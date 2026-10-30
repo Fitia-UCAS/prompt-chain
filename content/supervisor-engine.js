@@ -234,7 +234,10 @@ function fileTokens(text){
 function tokenIsOurs(token,spec){
   const text=nameNorm(token);
   if(text===spec.full||text.endsWith(spec.full))return true;
-  if(looseName(text)===looseName(spec.full))return true;
+  const looseText=looseName(text),looseFull=looseName(spec.full);
+  if(looseText===looseFull)return true;
+  // A filename containing ，。； is split by the tokenizer; the tail is still ours.
+  if(looseText.length>=4&&looseFull.endsWith(looseText))return true;
   const stripped=text.replace(/(?:…|\.{3})/g,'').trim(),cut=fileParts(stripped);
   if(cut.ext!==spec.ext)return false;
   if(cut.stem===spec.stem)return true;

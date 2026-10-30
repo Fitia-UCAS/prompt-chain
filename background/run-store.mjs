@@ -11,7 +11,7 @@ export function createRunStore({chrome, model: M, scheduler, clock: Date = globa
     if(replyView?.runId===value.runId&&replyView.index===value.index&&replyView.text===value.text)return;
     replyView=value;chrome.runtime.sendMessage?.({type:'PF_REPLY_VIEW',view:value})?.catch(()=>{});
   }
-  async function save(run) {delete run.lastReply;if(run.phase!=='waiting'||!M.ACTIVE.has(run.status))verificationReply(run,null);run.updatedAt = Date.now(); await chrome.storage.local.set({pfRun: run}); arm(run); return run;}
+  async function save(run) {delete run.lastReply;if(!M.ACTIVE.has(run.status))verificationReply(run,null);run.updatedAt = Date.now(); await chrome.storage.local.set({pfRun: run}); arm(run); return run;}
   function currentReply(run) {
     const current = run && M.ACTIVE.has(run.status) && replyView?.runId === run.id;
     return current ? replyView : run ? {runId: run.id, index: run.index, text: ''} : null;

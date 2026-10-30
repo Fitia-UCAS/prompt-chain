@@ -361,7 +361,10 @@
       if(op.attachment)lastUploadState=buildDiagnostic(op,{stage:'preflight',scan:reported,timeline:{startedAt:Date.now()},attempt:prior,previous:op.previousUpload,observedNames:prior?.names});
       if(initial.draft)throw new Error('DRAFT_NOT_EMPTY: Save or clear the existing draft before running');
       if(refs.length>1&&existing){
-        if(!op.reuseAttachments||setBefore.state!=='match')throw new Error('ATTACHMENT_CONFLICT: An incomplete or unrecognized attachment set is already in the composer; no message sent');
+        if(!op.reuseAttachments||setBefore.state!=='match'){
+          const detail=setBefore.files.map(item=>item.name+'='+item.state).join(' | ')+'; extras='+setBefore.extras+(setBefore.extraTexts?.length?' ('+setBefore.extraTexts.join(' / ')+')':'')+'; reused='+!!op.reuseAttachments;
+          throw new Error('ATTACHMENT_CONFLICT: An incomplete or unrecognized attachment set is already in the composer; no message sent ['+detail+']');
+        }
       }
       if(refs.length<=1&&existing){
         const evidence=reported?evidenceOf(reported,selectionOf(prior),aliasList(op)):{identity:'none'};
