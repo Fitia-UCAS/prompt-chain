@@ -19,7 +19,7 @@
         async function request(){const value=await token();return fetch('/backend-api/conversation/'+encodeURIComponent(id),{credentials:'include',cache:'no-store',headers:value?{authorization:'Bearer '+value}:{},signal:controller.signal});}
         let response=await request();
         if(response.status===401){auth={value:'',until:0};response=await request();}
-        if(response.status===429){blockedUntil=Date.now()+30000;throw new Error('对话原文读取被限流，请稍后恢复');}
+        if(response.status===429){blockedUntil=Date.now()+600000;throw new Error('对话原文读取被限流，请稍后恢复');}
         if(!response.ok)throw new Error('无法读取当前对话原文（'+response.status+'）');
         const raw=await response.json(),data=raw.mapping?raw:raw.data;
         if(!data?.mapping?.[data.current_node]||(data.conversation_id&&data.conversation_id!==id))throw new Error('无法确认当前对话分支');

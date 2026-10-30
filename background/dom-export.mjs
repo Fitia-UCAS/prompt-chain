@@ -53,7 +53,31 @@ export function createDomExport({chrome, clock = Date}) {
       (node.getAttribute('role') ? '(' + node.getAttribute('role') + ')' : '')
     ).join(' ');
     const mainNode = document.querySelector('main');
+    const inventory = {testids: {}, attrs: {}};
+    for (const node of document.querySelectorAll('[data-testid]')) {
+      const value = node.getAttribute('data-testid');
+      if (/turn|message|copy|response|assistant|markdown|conversation/i.test(value)) inventory.testids[value] = (inventory.testids[value] || 0) + 1;
+    }
+    for (const node of document.querySelectorAll('main *')) {
+      for (const attr of node.attributes || []) {
+        if (/^(data-)?(message|turn|author|role|markdown|copy|conversation)/i.test(attr.name)) inventory.attrs[attr.name] = (inventory.attrs[attr.name] || 0) + 1;
+      }
+    }
+    const textChains = [...document.querySelectorAll('main *')]
+      .filter(node => node.children.length === 0 && (node.textContent || '').trim().length > 20)
+      .slice(-3)
+      .map(node => {
+        const chain = [];
+        for (let current = node, depth = 0; current && current !== document.body && depth < 10; current = current.parentElement, depth++) {
+          chain.push(current.tagName.toLowerCase() +
+            (current.getAttribute('data-testid') ? '[' + current.getAttribute('data-testid') + ']' : '') +
+            (current.getAttribute('class') ? '.' + current.getAttribute('class').split(/\s+/)[0] : ''));
+        }
+        return {chain: chain.join(' < '), attrs: [...node.attributes].map(attr => attr.name).join(',')};
+      });
     const readers = {
+      inventory,
+      textChains,
       roleCounts,
       turns: document.querySelectorAll('[data-testid^="conversation-turn"]').length,
       articles: document.querySelectorAll('article').length,
