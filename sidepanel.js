@@ -298,7 +298,7 @@ $('steps').addEventListener('input',event=>{
 });
 $('flow-title').addEventListener('input',()=>{if(!editor||locked())return;editor.title=$('flow-title').value;autosave();});
 $('search').addEventListener('input',displayLibrary);$('sort').addEventListener('change',displayLibrary);
-$('home').onclick=task(actions.back);$('export-dom').innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${PromptChainIcons.dom}"/></svg>`;
+$('home').onclick=task(actions.back);$('export-dom').innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${PromptChainIcons.dom}"/></svg>`;
 $('export-dom').onclick=task(async()=>{await actions['export-dom']();});
 $('menu-toggle').onclick=()=>switchView('settings');
 $('settings-view').querySelectorAll('.settings-row .icon-button').forEach(button=>button.innerHTML=icon({'export-all':'export',monitor:'logs',trash:'trash','export-dom':'dom'}[button.dataset.action]||'file'));
