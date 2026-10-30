@@ -30,6 +30,7 @@ main{flex:1;min-height:0;overflow:auto;scrollbar-width:thin}section{padding:18px
 .settings-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;background:var(--surface);overflow:hidden}
 .settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;height:56px;padding:0 16px;font-size:14px;color:var(--ink)}
 .settings-row+.settings-row{border-top:1px solid var(--line)}
+.settings-version{margin:14px 2px 0;font-size:10px;color:var(--muted)}
 .settings-row .icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
 .panel-tools.log-tools{margin-left:auto}
