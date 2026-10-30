@@ -29,8 +29,7 @@ export function Settings({e,React,back,exportLibrary,ready,exporting,error,retry
         group('诊断',[
           action('导出页面 DOM','dom',exportDom,'导出页面 DOM'),
           domNote?e.jsx('p',{className:'pc-setting-note',children:domNote}):null
-        ]),
-        e.jsx('p',{className:'pc-setting-note',children:'Prompt Chain '+(chrome.runtime.getManifest?.().version||'')})
+        ])
       ]})
     ]})
   ]});

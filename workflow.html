@@ -54,15 +54,19 @@
         </details>
       </section>
       <section id="settings-view" hidden>
-        <div class="view-toolbar"><button class="text-button" data-action="back">‹ 流程库</button></div>
-        <h1>设置</h1>
-        <div class="settings-list">
-          <div class="settings-row"><span>导出全部流程</span><button class="icon-button" data-action="export-all" aria-label="导出全部流程"></button></div>
-          <div class="settings-row"><span>执行记录</span><button class="icon-button" data-action="monitor" aria-label="执行记录"></button></div>
-          <div class="settings-row"><span>最近删除</span><button class="icon-button" data-action="trash" aria-label="最近删除"></button></div>
-          <div class="settings-row"><span>导出页面 DOM</span><button class="icon-button" data-action="export-dom" aria-label="导出页面 DOM"></button></div>
+        <div class="settings-head"><button class="icon-button" data-action="back" aria-label="返回"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"/></svg></button><span>设置</span></div>
+        <div class="settings-groups">
+          <div class="settings-panel">
+            <div class="settings-row"><span>导出全部流程</span><button class="icon-button" data-action="export-all" aria-label="导出全部流程"></button></div>
+          </div>
+          <div class="settings-panel">
+            <div class="settings-row"><span>执行记录</span><button class="icon-button" data-action="monitor" aria-label="执行记录"></button></div>
+            <div class="settings-row"><span>最近删除</span><button class="icon-button" data-action="trash" aria-label="最近删除"></button></div>
+          </div>
+          <div class="settings-panel">
+            <div class="settings-row"><span>导出页面 DOM</span><button class="icon-button" data-action="export-dom" aria-label="导出页面 DOM"></button></div>
+          </div>
         </div>
-        <p class="settings-version" id="settings-version"></p>
       </section>
       <section id="trash-view" hidden>
         <div class="view-toolbar"><button class="text-button" data-action="back">‹ 流程库</button></div>
