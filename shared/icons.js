@@ -18,6 +18,7 @@ globalThis.PromptChainIcons={
   trash:'M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5',
   restore:'M3 10h8M3 10V2m0 8 4-4a8 8 0 1 1-2 9',
   sliders:'M4 7h9m4 0h3M4 17h3m4 0h9M13 4v6M7 14v6',
+  dom:'M9 5 4 12l5 7M15 5l5 7-5 7M13 4l-2 16',
   overwrite:'M4 4h11v11H4zM9 19h11V9M7 9h5',
   append:'M4 6h16M4 11h10M4 16h8M18 13v8m-4-4h8',
   back:'m12 5-7 7 7 7M5 12h14',

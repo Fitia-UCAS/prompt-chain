@@ -87,6 +87,10 @@ test('导出页面 DOM 只允许面板触发，并下载不含对话内容的诊
   const result=await h.message('PF_EXPORT_DOM',{tabId:4});
   assert.equal(result.ok,true,result.error);
   assert.match(h.downloads[0].filename,/^prompt-chain-dom-[\d-]+\.txt$/);
+  // Without a tabId the handler falls back to the active (or first) chat tab.
+  const auto=await h.message('PF_EXPORT_DOM',{});
+  assert.equal(auto.ok,true,auto.error);
+  assert.equal(h.downloads.length,2);
   const text=decodeURIComponent(h.downloads[0].url.split(',')[1]);
   assert.match(text,/=== FILENAME ELEMENTS ===/);
   assert.match(text,/=== COMPOSER HTML ===/);

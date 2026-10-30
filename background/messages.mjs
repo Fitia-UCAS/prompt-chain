@@ -15,8 +15,12 @@ export function createMessageHandler({chrome, model: M, store: S, runs, connecti
     if(message.type==='PF_EXPORT_DOM'){
       if(!uiSender(sender))throw new Error('只能从侧边栏导出页面诊断');
       const run=await getRun();
-      const tabId=Number(message.tabId)||run?.tabId||0;
-      if(!tabId)throw new Error('先选择一个目标对话');
+      let tabId=Number(message.tabId)||run?.tabId||0;
+      if(!tabId){
+        const tabs=await chrome.tabs.query({url:['https://chatgpt.com/*','https://chat.openai.com/*','https://gemini.google.com/*','https://chat.deepseek.com/*']});
+        tabId=(tabs.find(tab=>tab.active)||tabs[0])?.id||0;
+      }
+      if(!tabId)throw new Error('先打开一个聊天页面再导出诊断');
       return domExport.download(tabId);
     }
     if(message.type==='PF_CONNECT'){

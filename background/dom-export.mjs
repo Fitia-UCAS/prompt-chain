@@ -1,6 +1,6 @@
-// Captures the ChatGPT/DeepSeek composer markup from the live tab so attachment
-// cards can be inspected without DevTools. The report is downloaded as a text file
-// and never includes conversation messages.
+// Captures live page state for support: the composer markup (attachment cards),
+// the message reader's view, and the conversation API response. The report is
+// downloaded as text and never includes the conversation body.
 export function createDomExport({chrome, clock = Date}) {
   // The injected function is serialised without its closure, so every constant
   // must live inside it.
@@ -22,59 +22,80 @@ export function createDomExport({chrome, clock = Date}) {
     };
     const forms = [...document.querySelectorAll('form')];
     const form = forms.find(node => node.querySelector('[contenteditable="true"],textarea')) || forms[0] || null;
-    if (!form) return {error: 'COMPOSER_NOT_FOUND'};
     const names = [];
-    for (const node of form.querySelectorAll('span,div,a,p,strong,li')) {
-      const text = (node.textContent || '').trim();
-      if (text.length < 4 || text.length > 120 || !/\.[a-z0-9]{1,8}$/i.test(text)) continue;
-      names.push({
-        tag: node.tagName.toLowerCase(), testid: node.getAttribute('data-testid') || '',
-        cls: (node.getAttribute('class') || '').slice(0, 200), rendered: rendered(node),
-        path: path(node), text: text.slice(0, 120), html: node.outerHTML.slice(0, 800)
-      });
-      if (names.length >= 10) break;
+    if (form) {
+      for (const node of form.querySelectorAll('span,div,a,p,strong,li')) {
+        const text = (node.textContent || '').trim();
+        if (text.length < 4 || text.length > 120 || !/\.[a-z0-9]{1,8}$/i.test(text)) continue;
+        names.push({
+          tag: node.tagName.toLowerCase(), testid: node.getAttribute('data-testid') || '',
+          cls: (node.getAttribute('class') || '').slice(0, 200), rendered: rendered(node),
+          path: path(node), text: text.slice(0, 120), html: node.outerHTML.slice(0, 800)
+        });
+        if (names.length >= 10) break;
+      }
     }
-    const buttons = [...form.querySelectorAll('button,[role="button"]')].slice(0, 40).map(node => ({
+    const buttons = form ? [...form.querySelectorAll('button,[role="button"]')].slice(0, 40).map(node => ({
       label: [node.getAttribute('aria-label'), node.getAttribute('title')].filter(Boolean).join(' | '),
       testid: node.getAttribute('data-testid') || '', rendered: rendered(node),
       html: node.outerHTML.slice(0, 300)
-    }));
-    const roles = [...document.querySelectorAll('[data-message-author-role]')].map(node => node.getAttribute('data-message-author-role'));
-    const roleCounts = roles.reduce((map, role) => (map[role] = (map[role] || 0) + 1, map), {});
-    const turns = [...document.querySelectorAll('[data-testid^="conversation-turn"]')].length;
-    const lastMessages = [...document.querySelectorAll('[data-message-author-role]')].slice(-4).map(node => ({
-      role: node.getAttribute('data-message-author-role'), key: node.getAttribute('data-message-id') || '',
-      text: (node.innerText || '').trim().slice(0, 120), html: node.outerHTML.slice(0, 900)
-    }));
-    let history = null;
+    })) : [];
+    const roleCounts = {};
+    for (const node of document.querySelectorAll('[data-message-author-role]')) {
+      const role = node.getAttribute('data-message-author-role');
+      roleCounts[role] = (roleCounts[role] || 0) + 1;
+    }
+    const readers = {
+      roleCounts,
+      turns: document.querySelectorAll('[data-testid^="conversation-turn"]').length,
+      articles: document.querySelectorAll('article').length,
+      messageIds: document.querySelectorAll('[data-message-id]').length,
+      mainElements: document.querySelectorAll('main').length,
+      mainText: ((document.querySelector('main') || document.body).innerText || '').length,
+      lastMessages: [...document.querySelectorAll('[data-message-author-role]')].slice(-4).map(node => ({
+        role: node.getAttribute('data-message-author-role'), key: node.getAttribute('data-message-id') || '',
+        text: (node.innerText || '').trim().slice(0, 120), html: node.outerHTML.slice(0, 900)
+      }))
+    };
+    const history = {};
     try {
-      if (!globalThis.PromptChainHistory) history = {error: 'PromptChainHistory missing'};
+      const match = /\/c\/([^/]+)\/?$/.exec(location.pathname);
+      if (!match) history.error = 'no conversation id in the URL';
       else {
-        const value = await globalThis.PromptChainHistory.read(location.href);
-        history = {url: value.url, messages: (value.messages || []).length, last: (value.messages || []).slice(-3).map(item => ({role: item.role, text: (item.text || '').slice(0, 60), filesText: (item.filesText || '').slice(0, 60)}))};
+        const response = await fetch('/backend-api/conversation/' + encodeURIComponent(match[1]), {credentials: 'include', cache: 'no-store'});
+        const body = await response.text();
+        history.status = response.status;
+        history.ok = response.ok;
+        history.bodyHead = body.slice(0, 200);
       }
-    } catch (error) {history = {error: String((error && error.message) || error)};}
-    return {url: location.href, title: document.title, formPath: path(form), form: form.outerHTML.slice(0, CAP), names, buttons,
-      readers: {roleCounts, turns, lastMessages}, history};
+    } catch (error) {history.error = String((error && error.message) || error);}
+    return {url: location.href, title: document.title, formPath: form ? path(form) : '',
+      form: form ? form.outerHTML.slice(0, CAP) : '', names, buttons, readers, history};
   }
   function render(value) {
     const lines = ['Prompt Chain DOM diagnostic', 'at: ' + new Date(clock.now()).toISOString(),
       'url: ' + (value.url || ''), 'title: ' + (value.title || ''), 'scope: ' + (value.formPath || ''), '',
-      '=== FILENAME ELEMENTS ==='];
+      '=== MESSAGE READER ===', JSON.stringify(value.readers || null, null, 1),
+      '', '=== CONVERSATION API ===', JSON.stringify(value.history || null, null, 1),
+      '', '=== FILENAME ELEMENTS ==='];
     for (const item of value.names || []) lines.push(JSON.stringify(item));
     lines.push('', '=== BUTTONS ===');
     for (const item of value.buttons || []) lines.push(JSON.stringify(item));
-    lines.push('', '=== MESSAGE READER ===', JSON.stringify(value.readers || null, null, 1));
-    lines.push('', '=== HISTORY READER ===', JSON.stringify(value.history || null, null, 1));
     lines.push('', '=== COMPOSER HTML ===', value.form || '');
     return lines.join('\n');
   }
   async function download(tabId) {
-    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    const tab = tabId ? await chrome.tabs.get(tabId).catch(() => null) : null;
     if (!tab) throw new Error('TARGET_TAB_UNAVAILABLE: 目标标签页不可用');
-    const [injected] = await chrome.scripting.executeScript({target: {tabId}, func: pageCapture});
+    let injected = null;
+    try {
+      [injected] = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: pageCapture});
+    } catch (error) {
+      throw new Error('DOM_CAPTURE_FAILED: ' + String((error && error.message) || error));
+    }
     const value = injected?.result;
-    if (!value || value.error) throw new Error('DOM_CAPTURE_FAILED: ' + (value?.error || '页面没有返回内容'));
+    if (!value) throw new Error('DOM_CAPTURE_FAILED: 页面没有返回内容');
+    if (value.error) throw new Error('DOM_CAPTURE_FAILED: ' + value.error);
     const text = render(value);
     const stamp = new Date(clock.now()).toISOString().replace(/[:T]/g, '-').slice(0, 19);
     const filename = 'prompt-chain-dom-' + stamp + '.txt';
