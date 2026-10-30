@@ -6,6 +6,9 @@
   let lastUploadState=null,chatUploadAttempt=null;
   let active = null, disposed = false, timer = null, interval = null, observer = null;
   const snapshot = () => ({...E.snapshot(), bridgeVersion:2, documentId, operation: active ? {id: active.id, attempted: active.attempted} : null});
+  // A card per file can arrive with long gaps and no busy marker in between, so
+  // "nothing changed for this long" is the only reliable stall signal.
+  const UPLOAD_STALL_MS=30000;
   const invalidated = error => /extension context invalidated/i.test(error?.message || String(error));
   function dispose() {
     if (disposed) return;
@@ -102,7 +105,7 @@
       busy:!!busy,busySamples:timeline?.busySamples||0,quietMs:quiet?now-quiet:0,sendReady:sendReady??null,reused:!!op.reuseAttachment,
       busyClearedMs:timeline?.busyClearedAt?now-timeline.busyClearedAt:0,
       observationMs:timeline?.observedSince?now-timeline.observedSince:0,
-      observationTimeoutMs:8000,
+      observationTimeoutMs:UPLOAD_STALL_MS,
       timeline:timeline?{...timeline}:null,
       previousOperation:previous||op.previousUpload||null,
       waitingFor:waitingFor||stage
@@ -175,6 +178,10 @@
       }else if(busySamples){
         if(!timeline.busyClearedAt){timeline.busyClearedAt=now;timeline.observedSince=now;}
       }else if(!timeline.observedSince)timeline.observedSince=now;
+      // A card that appears or changes identity is progress even when the page
+      // exposes no busy signal, so the stall window restarts from that sample.
+      const cardState=evidence.identity+'|'+scan.strength+'|'+observed+'|'+(scan.cards.length||0);
+      if(cardState!==timeline.cardState){timeline.cardState=cardState;if(!busy)timeline.observedSince=now;}
       if(scan.cards.length&&!timeline.firstCardAt)timeline.firstCardAt=now;
       if(matched&&!timeline.firstMatchAt)timeline.firstMatchAt=now;
       if(sendReady&&!timeline.sendReadyAt)timeline.sendReadyAt=now;
@@ -185,7 +192,7 @@
         quiet ||= now; if (now - quiet >= 850){lastUploadState.waitingFor='ready';op.displayName=attempt.displayName||'';lastUploadState.alias=attempt.displayName||'';return current;}
       } else quiet = 0;
       if(!matched&&!busy){
-        if(now-timeline.observedSince>8000){
+        if(now-timeline.observedSince>UPLOAD_STALL_MS){
           const detail='observed '+String(now-timeline.observedSince)+'ms '+(busySamples?'after processing signal cleared':'from upload start (no busy signal observed)')+', '+describeScan(scan);
           if(evidence.identity==='unknown'||scan.cards.length)throw new Error('UPLOAD_ATTACHMENT_UNIDENTIFIED: An attachment card is present but its identity could not be confirmed; nothing was sent ('+detail+')');
           throw new Error('UPLOAD_PREVIEW_NOT_RECOGNIZED: No attachment card was observed in the composer search scope ('+detail+')');
@@ -201,7 +208,7 @@
     const snapshotDiagnostic=(stage,scan,waitingFor,selection,busy=false,reason='')=>{
       const files=refs.map((ref,index)=>({id:ref.id,name:ref.name,size:ref.size,mimeType:ref.mimeType,
         selection:selection[index]||'unknown',card:scan?.files?.[index]?.state||'missing',
-        strength:scan?.files?.[index]?.strength||'none',alias:scan?.files?.[index]?.alias||'',busy,reason:reason||''}));
+        strength:scan?.files?.[index]?.strength||'none',hits:scan?.files?.[index]?.hits??null,alias:scan?.files?.[index]?.alias||'',busy,reason:reason||''}));
       lastUploadState={v:4,stage,operation,sampledAt:Date.now(),elapsedMs:Date.now()-startedAt,
         fileCount:refs.length,expected:refs.map(ref=>({id:ref.id,name:ref.name,size:ref.size})),files,
         cardCount:scan?.cardCount??null,extras:scan?.extras??null,conflicts:scan?.collisions||[],
@@ -289,16 +296,23 @@
         if(lastUploadState.files[i].card!=='match')throw new Error('UPLOAD_PREVIEW_NOT_RECOGNIZED: '+refs[i].name);
       }
     }
-    let quiet=0,observed=0;
+    const STALL_MS=UPLOAD_STALL_MS;
+    let quiet=0,observed=0,progress='';
+    // Files are processed one at a time and each card only appears when its own
+    // upload finishes; a change in the confirmed set therefore restarts the stall
+    // window instead of the whole batch failing after a fixed 8 seconds.
     while(Date.now()-startedAt<120000){
       await E.sleep(250);guard(op);
       if(E.composer()!==c||!form.isConnected||E.ctext(c))throw new Error('UPLOAD_COMPOSER_CHANGED: Draft or composer changed');
       const scan=E.scanAttachmentSet(c,refs),error=uploadError(form);
       const busy=uploadBusy(form),sendReady=!!E.sendBtn(c);
-      const waitingFor=scan.state==='match'?(busy?'processing':sendReady?'upload stability':'send button'):'missing attachment cards';
+      const confirmed=scan.files.filter(item=>item.state==='match').length;
+      const waitingFor=scan.state==='match'?(busy?'processing':sendReady?'upload stability':'send button'):'missing attachment cards '+confirmed+'/'+refs.length;
       snapshotDiagnostic('observing',scan,waitingFor,selection,busy);
       if(error)throw new Error('UPLOAD_REJECTED: '+error);
       if(scan.state==='conflict')throw new Error('UPLOAD_ATTACHMENT_MISMATCH: Unexpected or duplicate attachment card; no message sent');
+      const state=scan.files.map(item=>item.state).join(',');
+      if(state!==progress){progress=state;observed=Date.now();}
       if(scan.state==='match'&&!busy&&sendReady&&selection.every(value=>value==='confirmed')){
         quiet||=Date.now();if(Date.now()-quiet>=850){
           snapshotDiagnostic('ready',scan,'ready',selection);
@@ -306,8 +320,13 @@
           return c;
         }
       }else quiet=0;
-      if(!busy){observed||=Date.now();if(scan.state!=='match'&&Date.now()-observed>8000)throw new Error('UPLOAD_SET_INCOMPLETE: Missing: '+scan.files.filter(item=>item.state!=='match').map(item=>item.name).join('、'));}
-      else observed=0;
+      if(!busy){
+        observed||=Date.now();
+        if(scan.state!=='match'&&Date.now()-observed>STALL_MS){
+          const detail=scan.files.filter(item=>item.state!=='match').map(item=>item.name).join('、');
+          throw new Error('UPLOAD_SET_INCOMPLETE: Missing: '+detail+' ('+confirmed+'/'+refs.length+' confirmed, '+Math.round((Date.now()-observed)/1000)+'s without a new card)');
+        }
+      }else observed=0;
     }
     throw new Error('UPLOAD_TIMEOUT: The complete attachment set was not confirmed');
   }

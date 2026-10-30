@@ -91,14 +91,14 @@ test('上传忙碌持续超过八秒后，卡片在忙碌结束之后才渲染�
   assert.ok(h.diagnostic().busySamples >= 40, 'busy samples should be recorded');
 });
 
-test('上传处理结束后八秒内仍未识别到附件才报错，并说明范围与候选数量', async () => {
+test('上传处理结束后等待完整个窗口仍无卡片才报错，并说明范围与候选数量', async () => {
   const h = harness();
   let settled = false, outcome;
   h.result.then(value => {settled = true; outcome = value;});
   await h.advance(11250);
   h.setBusy(false);
   await h.advance(250);
-  for (let step = 0; step < 40 && !settled; step++) await h.advance(250);
+  for (let step = 0; step < 140 && !settled; step++) await h.advance(250);
   assert.equal(settled, true, 'upload should settle');
   assert.equal(outcome.ok, false);
   assert.match(outcome.error, /^UPLOAD_PREVIEW_NOT_RECOGNIZED:/);

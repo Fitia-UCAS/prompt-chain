@@ -28,10 +28,14 @@ test('送达回执必须逐个核对五个附件，别名只在对应文件命�
  assert.equal(M.receipt({...snap,lastUser:{...snap.lastUser,filesText:refs.map((ref,i)=>i===0?ref.name+'.other':ref.name).join('\n')}},pending),false,'子串不可冒充附件原名');
 });
 
-function browser({provider='chatgpt',omit='',stranger='',reuse=false,multiple=true,rejectMulti=false}={}){
+function browser({provider='chatgpt',omit='',stranger='',reuse=false,multiple=true,rejectMulti=false,stagger=0}={}){
  let now=0,clicks=0,assignments=0;
- const observed=reuse?refs.map(ref=>ref.name):[],ready=[],selectedGroups=[];
- const addNames=(files)=>{for(const file of files)if(file.name!==omit&&!observed.includes(file.name))observed.push(file.name);if(stranger&&!observed.includes(stranger))observed.push(stranger);};
+ const observed=reuse?refs.map(ref=>ref.name):[],ready=[],selectedGroups=[],cardAt=new Map();
+ for(const name of observed)cardAt.set(name,0);
+ // stagger emulates the real site, which reveals one card per file with no busy
+ // marker in the gaps between them.
+ const delivered=()=>[...cardAt].filter(([,at])=>at<=now).map(([name])=>name);
+ const addNames=(files)=>{let slot=cardAt.size;for(const file of files){if(file.name===omit||observed.includes(file.name))continue;observed.push(file.name);cardAt.set(file.name,stagger?now+slot*stagger:now);slot++;}if(stranger&&!observed.includes(stranger)){observed.push(stranger);cardAt.set(stranger,stagger?now+slot*stagger:now);}};
  const inputListeners=new Set();
  const input={accept:'',multiple,disabled:false,files:[],id:'octane-mobile-composer-files-input',hasAttribute:()=>false,
    addEventListener(t,cb){if(t==='change')inputListeners.add(cb);},removeEventListener(t,cb){inputListeners.delete(cb);},
@@ -46,9 +50,10 @@ function browser({provider='chatgpt',omit='',stranger='',reuse=false,multiple=tr
  const messages=[];
  const button={click(){clicks++;composer.content='';}};
  const originalScan=(r)=>{
-   const files=r.map(ref=>({id:ref.id,name:ref.name,size:ref.size,state:observed.includes(ref.name)?'match':'missing',strength:'strong',alias:''}));
-   const extras=observed.filter(name=>!r.some(ref=>ref.name===name)).length;
-   return{state:extras?'conflict':files.every(f=>f.state==='match')?'match':'missing',files,cardCount:observed.length,extras,collisions:[]};
+   const names=delivered();
+   const files=r.map(ref=>({id:ref.id,name:ref.name,size:ref.size,state:names.includes(ref.name)?'match':'missing',strength:'strong',alias:'',hits:names.includes(ref.name)?1:0}));
+   const extras=names.filter(name=>!r.some(ref=>ref.name===name)).length;
+   return{state:extras?'conflict':files.every(f=>f.state==='match')?'match':'missing',files,cardCount:names.length,extras,collisions:[]};
  };
  const supervisor={
    snapshot(){return{url:URL,hasComposer:true,draft:composer.content,generating:false,lastUser:clicks?{key:'u',text:'',filesText:observed.join('\n')}:null,messages:[]};},
@@ -92,6 +97,12 @@ for(const provider of ['chatgpt','gemini','deepseek']){
 }
 test('ChatGPT 上传卡片出现无关文件，整组终止',async()=>{
  const h=browser({stranger:'无关.txt'}),res=await h.result;assert.equal(res.ok,false);assert.match(res.error,/MISMATCH|CONFLICT/);assert.equal(h.clicks,0);
+});
+test('ChatGPT 卡片逐张出现（间隔长于旧版 8 秒窗口）时不误判缺失',async()=>{
+ const h=browser({stagger:5000}),res=await h.result;assert.equal(res.ok,true,res.error);assert.equal(h.clicks,1);
+});
+test('ChatGPT 始终缺少卡片时给出确认进度并拒绝发送',async()=>{
+ const h=browser({omit:refs[2].name}),res=await h.result;assert.equal(res.ok,false);assert.match(res.error,/UPLOAD_SET_INCOMPLETE: Missing: 参考文件3\.txt/);assert.match(res.error,/4\/5 confirmed|4\/5/);assert.equal(h.clicks,0);
 });
 test('ChatGPT 恢复已齐全的五附件：不重选、不重复上传',async()=>{
  const h=browser({reuse:true}),res=await h.result;assert.equal(res.ok,true,res.error);assert.equal(h.assignments,0);assert.equal(h.clicks,1);assert.equal(h.ready.length,5);

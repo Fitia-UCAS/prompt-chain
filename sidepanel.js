@@ -332,11 +332,23 @@ $('clear-logs').innerHTML=icon('trash');
 $('clear-logs').onclick=task(async event=>{event.preventDefault();event.stopPropagation();await rpc('PF_CLEAR_LOGS');});
 for(const [id,icon]of [['pause','pause'],['resume','play'],['stop','stop']])$(id).innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${PromptChainIcons[icon]}"/></svg>`;
 $('step-tools').addEventListener('click',event=>{event.preventDefault();event.stopPropagation();});
+async function copyText(text){
+  try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);return;}}catch(error){}
+  // The async clipboard API rejects with "Document is not focused" when focus is on
+  // the chat page. A selection copy inside the panel still works, so fall back to it
+  // instead of failing silently.
+  const area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');
+  area.style.cssText='position:fixed;top:-1000px;left:-1000px;width:1px;height:1px;opacity:0';
+  document.body.append(area);
+  try{area.select();area.setSelectionRange(0,area.value.length);if(!document.execCommand('copy'))throw new Error('复制失败：请先点击面板内部，再重新复制');}
+  finally{area.remove();}
+}
 $('copy-logs').onclick=task(async event=>{
   event.preventDefault();event.stopPropagation();if(!runState)return;
   const lines=[runState.flow.title,...runState.logs.map(PromptChainLogging.format)];
   try{const result=await rpc('PF_DIAGNOSTIC');if(result.diagnostic)lines.push('\nDiagnostics',JSON.stringify(result.diagnostic,null,2));}catch(error){lines.push('\nDiagnostics: '+PromptChainLogging.reason(error.message));}
-  await navigator.clipboard.writeText(lines.join('\n'));
+  await copyText(lines.join('\n'));
+  notice('已复制日志与诊断信息',true);
 });
 async function resumeRun(){if(runCommandPending)return;const button=$('resume');runCommandPending=true;button.disabled=true;button.setAttribute('aria-busy','true');button.innerHTML=icon('refresh');try{let result;if(runState?.status==='paused'){try{result=await rpc('PF_RESUME');}catch(error){if(!error.message.startsWith('RESEND_CONFIRMATION_REQUIRED:'))throw error;if(!confirm('尚未发现本步的新消息。确认网页没有发送成功，并重新发送本步？'))return;result=await rpc('PF_RETRY');}}else{const tabId=Number($('target').value);if(!tabId)throw new Error('先选择目标对话');const saved=(await S.readLibrary()).flows.find(flow=>flow.id===runState.flow.id);result=await rpc('PF_START',{flow:saved||runState.flow,tabId});}runState=result.run||runState;await refreshTabs();displayRun(true);$('notice').hidden=true;}finally{runCommandPending=false;button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=icon('play');displayRun();}}
 $('pause').onclick=task(()=>rpc('PF_PAUSE'));$('resume').onclick=task(resumeRun);
