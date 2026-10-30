@@ -44,21 +44,16 @@ function patch(){
       button.onclick=action(async()=>{button.disabled=true;try{await connect(true);await refresh();}finally{button.disabled=false;}});
       header.after(button);
     }
-    // Same affordance as the workflow page: one ellipsis menu, with settings and
-    // the DOM export, instead of a separate gear.
+    // Keep the gear for settings and give the DOM export its own icon, in both the
+    // idle panel and the running monitor.
     const gear=document.querySelector('.popup-header button[aria-label="设置"]');
-    if(gear&&!gear.dataset.pcMenu){
-      gear.dataset.pcMenu='1';gear.style.display='none';
-      const toggle=document.createElement('button');
-      toggle.id='pc-menu-toggle';toggle.className='icon-button pc-icon';toggle.setAttribute('aria-label','更多操作');
-      toggle.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
-      const menu=document.createElement('div');menu.id='pc-header-menu';menu.hidden=true;
-      const item=(label,run)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=async()=>{menu.hidden=true;await run();};menu.append(button);};
-      item('设置',()=>gear.click());
-      item('导出页面 DOM',()=>action(async()=>{const result=await rpc('PF_EXPORT_DOM');toast('已导出 '+result.filename);})());
-      toggle.onclick=()=>{menu.hidden=!menu.hidden;};
-      document.addEventListener('pointerdown',event=>{if(!menu.hidden&&!event.target.closest('#pc-header-menu,#pc-menu-toggle'))menu.hidden=true;});
-      gear.after(toggle);toggle.after(menu);
+    if(gear&&!gear.dataset.pcDom){
+      gear.dataset.pcDom='1';
+      const button=document.createElement('button');
+      button.id='pc-export-dom';button.className='icon-button pc-icon';button.setAttribute('aria-label','导出页面 DOM');
+      button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 12l5 7M15 5l5 7-5 7M13 4l-2 16"/></svg>';
+      button.onclick=action(async()=>{const result=await rpc('PF_EXPORT_DOM');toast('已导出 '+result.filename);});
+      gear.before(button);
     }
   }
 }

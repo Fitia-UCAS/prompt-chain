@@ -298,7 +298,9 @@ $('steps').addEventListener('input',event=>{
 });
 $('flow-title').addEventListener('input',()=>{if(!editor||locked())return;editor.title=$('flow-title').value;autosave();});
 $('search').addEventListener('input',displayLibrary);$('sort').addEventListener('change',displayLibrary);
-$('home').onclick=task(actions.back);$('menu-toggle').onclick=()=>{$('menu').hidden=!$('menu').hidden;};
+$('home').onclick=task(actions.back);$('export-dom').innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${PromptChainIcons.dom}"/></svg>`;
+$('export-dom').onclick=task(async()=>{await actions['export-dom']();});
+$('menu-toggle').onclick=()=>{$('menu').hidden=!$('menu').hidden;};
 document.addEventListener('pointerdown',event=>{if(!event.target.closest('#menu,#menu-toggle'))$('menu').hidden=true;});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('menu').hidden){$('menu').hidden=true;$('menu-toggle').focus();}});
 window.addEventListener('blur',()=>{$('menu').hidden=true;});
