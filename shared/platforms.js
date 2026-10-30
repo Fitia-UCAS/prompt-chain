@@ -8,15 +8,25 @@
   function route(value) {
     const provider = providerFor(value); if (!provider) return null;
     const url = new URL(value), path = url.pathname.replace(/\/$/, '');
+    // ChatGPT project pages omit the slug that project conversations carry
+    // (/g/g-p-<id>/project vs /g/g-p-<id>-<slug>/c/<conv>), so the project id
+    // alone identifies the scope; otherwise a new chat inside a project looks
+    // like a different conversation and the run pauses right after sending.
+    const projectScope = segment => {
+      const id = segment.startsWith('/g/') ? segment.slice(3).replace(/\/$/, '') : segment;
+      const match = /^g-p-([0-9a-f]{16,})(?:$|-)/i.exec(id);
+      return '/g/' + (match ? 'g-p-' + match[1].toLowerCase() : id) + '/';
+    };
+    const scopeOf = segment => segment.startsWith('/g/') ? projectScope(segment) : segment;
     if (provider === 'chatgpt') {
       // A project page (/g/g-p-…/project) owns the same composer as a new chat.
       // Its conversations live under the shared /g/g-p-…/ scope, so a flow may
       // start there and then resolve into /g/g-p-…/c/<id>.
       const project = /^(\/g\/[^/]+)\/project$/.exec(path);
-      if (project) return {provider, origin: url.origin, scope: project[1] + '/', id: ''};
+      if (project) return {provider, origin: url.origin, scope: scopeOf(project[1]), id: ''};
       const match = /^(\/(?:g\/[^/]+\/)?)(?:c|uc)\/([^/]+)$/.exec(path);
-      if (match) return {provider, origin: url.origin, scope: match[1], id: temporaryScope(value) ? '' : match[2]};
-      if (path === '' || /^\/g\/[^/]+$/.test(path)) return {provider, origin: url.origin, scope: path ? path + '/' : '/', id: ''};
+      if (match) return {provider, origin: url.origin, scope: scopeOf(match[1]), id: temporaryScope(value) ? '' : match[2]};
+      if (path === '' || /^\/g\/[^/]+$/.test(path)) return {provider, origin: url.origin, scope: path ? scopeOf(path) : '/', id: ''};
     }
     if (provider === 'gemini') {
       const match = /^(\/(?:u\/\d+\/)?(?:app|gem\/[^/]+))(?:\/([^/]+))?$/.exec(path);

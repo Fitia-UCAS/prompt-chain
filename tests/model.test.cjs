@@ -119,6 +119,18 @@ test('ChatGPT 项目页可作为新聊天入口，并与项目内对话共用范
   assert.equal(M.sameChat('https://chatgpt.com/',project,true),false);
   assert.equal(M.sameChat('https://chatgpt.com/g/g-custom',project,true),false);
 });
+test('ChatGPT 项目对话地址带项目名后缀时仍与项目页同属一个范围',()=>{
+  const project='https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b/project';
+  const slugged='https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b-webnovel/c/6ae4de92-2a00-83e9-a0a7-887adb60d455';
+  const plain='https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b/c/6ae4de92-2a00-83e9-a0a7-887adb60d455';
+  assert.equal(M.platforms.route(project).scope,M.platforms.route(slugged).scope);
+  assert.equal(M.sameChat(project,slugged,true),true);
+  assert.equal(M.sameChat(project,plain,true),true);
+  assert.equal(M.sameChat(slugged,plain),true);
+  assert.equal(M.sameChat(project,slugged),false,'需要 allowNewChat 才能从项目页升级到具体对话');
+  assert.equal(M.sameChat(project,'https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b9/c/one',true),false);
+  assert.equal(M.sameChat('https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b9/project',slugged,true),false);
+});
 test('送达必须是新用户消息并匹配原文与附件名',()=>{
   const pending={baselineUserKey:'u1',text:'请阅读',attachment:{name:'原文.md'}};
   const snapshot={lastUser:{key:'u2',text:'请阅读',filesText:'原文.md'}};
