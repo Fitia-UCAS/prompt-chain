@@ -34,15 +34,13 @@ main{flex:1;min-height:0;overflow:auto;scrollbar-width:thin}section{padding:18px
 .panel-tool[aria-busy="true"] svg{animation:connection-spin 1s linear infinite}@keyframes connection-spin{to{transform:rotate(360deg)}}
 .trash-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.trash-heading h1{margin-bottom:0}.trash-heading .danger{color:var(--danger)}
 
-#settings-view{display:flex;flex-direction:column;padding:0}
+#settings-view{display:flex;flex-direction:column;padding:0;color:#1c272c}
 body.settings-mode .app-header,body.settings-mode .footer{display:none}
-.settings-head{display:flex;align-items:center;gap:12px;padding:16px 16px 13px;border-bottom:1px solid #d9dfe1;background:#fbfcfc}
-.settings-head .icon-button{width:32px;height:32px}
-.settings-head .icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.settings-head>span{font-size:17px;font-weight:650;letter-spacing:-.01em}
-.settings-groups{display:flex;flex-direction:column;gap:12px;padding:16px 16px 120px}
-.settings-panel{border:1px solid var(--line);border-radius:4px;background:var(--surface);overflow:hidden}
-.settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;height:56px;padding:0 16px;font-size:14px}
-.settings-row+.settings-row{border-top:1px solid var(--line)}
-.settings-row .icon-button{width:32px;height:32px;flex-shrink:0}
-.settings-row .icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#settings-view .settings-head{display:flex;align-items:center;gap:12px;padding:16px 16px 13px;border-bottom:1px solid #d9dfe1;background:#fbfcfc}
+#settings-view .settings-head>span{font-size:20px;font-weight:650;letter-spacing:-.4px;line-height:22px;color:#1c272c}
+#settings-view .settings-groups{display:flex;flex-direction:column;gap:12px;padding:16px 16px 120px}
+#settings-view .settings-panel{border:1px solid #cfd6d8;border-radius:4px;background:#fff;overflow:hidden}
+#settings-view .settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;height:56px;padding:0 16px;font-size:14px;color:#1c272c}
+#settings-view .settings-row+.settings-row{border-top:1px solid #cfd6d8}
+#settings-view .icon-button{width:32px;height:32px;border:1px solid #cfd6d8;border-radius:4px;background:#fff;color:#46555c}
+#settings-view .icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
