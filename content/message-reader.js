@@ -68,7 +68,15 @@
     return fallback;
   }
   function messageRoot(node,main){
-    const turn=node.closest(TURNS);if(turn&&turn.querySelectorAll(USER).length<=1)return turn;
+    const turn=node.closest(TURNS);
+    // A turn may hold the user bubble and the answer together; the nearest role
+    // wrapper is the message itself, so it must win over the whole turn.
+    if(turn){
+      for(let parent=node;parent&&parent!==turn.parentElement;parent=parent.parentElement){
+        if(declared(parent))return parent;
+      }
+      if(turn.querySelectorAll(USER).length<=1)return turn;
+    }
     for(let parent=node;parent&&parent!==main;parent=parent.parentElement){if(declared(parent))return parent;}
     const bubble=node.closest(USER);if(!bubble)return node;
     let result=bubble;
@@ -129,7 +137,8 @@
       if(kind==='assistant'&&!text)continue;
       const fingerprint=M.fingerprint(kind+'\n'+text),occurrence=(occurrences.get(fingerprint)||0)+1;occurrences.set(fingerprint,occurrence);
       const testId=node.getAttribute('data-testid')||'';
-      const native=node.getAttribute('data-message-id')||node.querySelector('[data-message-id]')?.getAttribute('data-message-id')||(kind==='assistant'?node.closest('[data-message-id]')?.getAttribute('data-message-id'):'')||node.getAttribute('data-turn-id')||node.getAttribute('data-turn-key')||(/^conversation-turn-.+/.test(testId)?testId:'');
+      const turnKey=node.getAttribute('data-turn-key')||node.closest('[data-turn-key]')?.getAttribute('data-turn-key')||'';
+      const native=node.getAttribute('data-message-id')||node.querySelector('[data-message-id]')?.getAttribute('data-message-id')||(kind==='assistant'?node.closest('[data-message-id]')?.getAttribute('data-message-id'):'')||node.getAttribute('data-turn-id')||node.getAttribute('data-turn-key')||(turnKey?turnKey+':'+kind:'')||(/^conversation-turn-.+/.test(testId)?testId:'');
       const key=native?'m:'+native:'dom:'+kind+':'+fingerprint+':'+occurrence;
       const folded=[...node.querySelectorAll('button,[role="button"]')].some(el=>[el.textContent,el.getAttribute('aria-label')].some(value=>/^(展开|展开更多|显示更多|显示全文|查看更多|Expand|Show more|Read more)(?:\s*(?:消息|内容|message|text))?$/i.test(clean(value))))||body(node,kind).getAttribute('data-collapsed')==='true';
       if(messages.some(message=>message.key===key))continue;
