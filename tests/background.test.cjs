@@ -62,6 +62,20 @@ async function deliveredNewChat() {
   assert.equal(h.shared.pfRun.phase,'waiting');return{h,snap};
 }
 
+test('编辑器尚未就绪时只记一次等待并持续重试，就绪后自动开始',async()=>{
+  const run={id:'ready-run',flow:{delaySeconds:0,steps:[{text:'消息一'}]},tabId:4,targetUrl:url,status:'running',phase:'ready',index:0,repeated:0,logs:[],reason:'',pending:null,allowNewChat:false};
+  const h=harness({pfRun:run}, {hasComposer:false});await h.drain();
+  assert.equal(h.sends.length,0);
+  assert.equal(h.shared.pfRun.status,'running');
+  await h.beat();await h.beat();
+  assert.equal(h.sends.length,0);
+  assert.equal(h.shared.pfRun.logs.filter(item=>item.text.startsWith('Waiting: the composer')).length,1);
+  h.setSnapshot({hasComposer:true});await h.beat();await h.drain();
+  assert.equal(h.sends.length,1);
+  assert.equal(h.sends[0].text,'消息一');
+  assert.ok(h.shared.pfRun.logs.some(item=>item.text==='Preparing step 1/1'));
+});
+
 test('清空日志只允许侧栏，不修改运行位置或发送意图',async()=>{
  const {h}=await deliveredNewChat(),before=structuredClone(h.shared.pfRun);
  assert.equal((await h.message('PF_CLEAR_LOGS',{},true)).ok,false);

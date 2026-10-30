@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prompt Chain",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "在 ChatGPT、Gemini 和 DeepSeek 中编排提示词与附件，等待回答后自动执行下一步。",
   "permissions": [
     "storage",

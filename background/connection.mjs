@@ -4,6 +4,14 @@ import {reason as logReason} from '../shared/logging.mjs';
 export function createConnection({chrome, model: M, runs, native, clock: Date = globalThis.Date, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))}) {
   const {getRun} = runs;
   const closed = message => /No tab with id|Invalid tab ID|The tab was closed/i.test(message || '');
+  // A page that never answers must not freeze the tick; the timer is unref'd so a
+  // completed request cannot keep the process alive.
+  const wait = milliseconds => new Promise(resolve => {const id = setTimeout(resolve, milliseconds); id?.unref?.();});
+  function ask(tabId, timeoutMs = 15000) {
+    const request = chrome.tabs.sendMessage(tabId, {type: 'PF_STATUS'});
+    request.catch(() => {});
+    return Promise.race([request, wait(timeoutMs).then(() => {throw failure('WEB_NOT_CONNECTED','The page did not answer the extension status request within '+Math.round(timeoutMs/1000)+'s');})]);
+  }
   function failure(code,message,cause){
     const error=new Error(code+': '+message);
     error.code=code;
@@ -18,12 +26,12 @@ export function createConnection({chrome, model: M, runs, native, clock: Date = 
     const {tab:bound,error:tabError}=await tabState(tabId);
     if(!bound)throw new Error((tabError.startsWith('TARGET_TAB_CLOSED')?tabError:'TARGET_TAB_UNAVAILABLE: The bound tab could not be read')+' (tabId '+tabId+')');
     try {
-      let response = await chrome.tabs.sendMessage(tabId, {type: 'PF_STATUS'});
+      let response = await ask(tabId);
       if (!response?.ok) throw failure('WEB_NOT_CONNECTED','The page did not answer the extension status request');
       if(response.snapshot.reader?.version!==7||response.snapshot.engineVersion!==10){
         const tab=await chrome.tabs.get(tabId);if(!M.allowedUrl(tab.url))throw new Error('目标页已离开支持的聊天网站');
         await chrome.scripting.executeScript({target:{tabId},files:['vendor/marked/marked.min.js','shared/platforms.js','shared/model.js','content/history-reader.js','content/site-messages.js','content/message-reader.js','content/supervisor-engine.js']});
-        response=await chrome.tabs.sendMessage(tabId,{type:'PF_STATUS'});if(!response?.ok)throw new Error('读取器更新后未连接');
+        response=await ask(tabId);if(!response?.ok)throw new Error('读取器更新后未连接');
       }
       const snapshot=response.snapshot,run=await getRun(),operation=run?.tabId===tabId?(run.pending||run.delivery):null;
       if(M.platforms.providerFor(snapshot.url)==='chatgpt'&&M.conversationPath(snapshot.url)&&snapshot.reader&&(snapshot.reader.users===0||snapshot.reader.assistants===0||(snapshot.lastRole==='user'&&!snapshot.generating)||(operation&&!M.receipt(snapshot,operation)))){

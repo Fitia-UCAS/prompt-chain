@@ -6,7 +6,7 @@ import {createMessageHandler} from './messages.mjs';
 
 export function createBackground({chrome, model, store, native, upstream, fileMatch, clock = Date, timers = globalThis}) {
   let runner;
-  const scheduler = createScheduler({tick: () => runner.tick(), timers});
+  const scheduler = createScheduler({tick: () => runner.tick(), timers, clock});
   const runs = createRunStore({chrome, model, scheduler, clock});
   const connection = createConnection({chrome, model, runs, native, clock});
   runner = createRunner({chrome, model, store, runs, connection, scheduler, native, fileMatch, clock});

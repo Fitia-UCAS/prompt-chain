@@ -19,18 +19,26 @@ export function createRunner({chrome, model: M, store: S, runs, connection, sche
   }
   async function acquireNative(run){
     if(!native)return;
-    const response=await chrome.tabs.sendMessage(run.tabId,{type:'PC_ACQUIRE',payload:{}}).catch(()=>null);
-    if(!response?.result?.acquired){
-      const state=await tabState(run.tabId).catch(()=>({tab:null}));
-      if(!state.tab)throw new Error('TARGET_TAB_CLOSED: The bound tab no longer exists (tabId '+run.tabId+')');
-      throw new Error('页面有其他队列正在运行，或尚未刷新连接');
+    const timeout = message => sleep(4000).then(() => {throw new Error(message);});
+    let response = null;
+    for(let attempt = 0; attempt < 3; attempt++){
+      const request = chrome.tabs.sendMessage(run.tabId,{type:'PC_ACQUIRE',payload:{}}).catch(()=>null);
+      request.catch(()=>{});
+      response = await Promise.race([request, timeout('PAGE_LOCK_TIMEOUT: 页面没有响应队列锁请求')]);
+      if(response?.result?.acquired){run.nativeLock = true; return;}
+      if(response)break;
+      await sleep(500);
     }
-    run.nativeLock=true;
+    if(response?.result?.acquired){run.nativeLock = true; return;}
+    const state = await tabState(run.tabId).catch(()=>({tab:null}));
+    if(!state.tab)throw new Error('TARGET_TAB_CLOSED: The bound tab no longer exists (tabId '+run.tabId+')');
+    throw new Error('PAGE_LOCK_UNAVAILABLE: 页面没有授予队列锁，或其他队列正在运行；请刷新目标页面后恢复');
   }
   async function releaseNative(run){
     if(!run.nativeLock)return;
     run.nativeLock=false;
-    await chrome.tabs.sendMessage(run.tabId,{type:'PC_RELEASE',payload:{}}).catch(()=>{});
+    const request = chrome.tabs.sendMessage(run.tabId,{type:'PC_RELEASE',payload:{}}).catch(()=>{});
+    await Promise.race([request, sleep(3000)]).catch(()=>{});
   }
   function adoptReceipt(run, snapshot) {
     const pending = run.pending;
@@ -93,8 +101,18 @@ export function createRunner({chrome, model: M, store: S, runs, connection, sche
     await pause(run, result?.error || '页面未确认发送结果，请核对对话后恢复');
   }
   async function dispatch(run, snapshot, repeatText) {
+    // A tick that was abandoned by the scheduler watchdog may resume later; two
+    // dispatches for the same step must never both reach the page.
+    const stored = await getRun();
+    if (!stored || stored.id !== run.id || stored.status !== 'running' || stored.pending || stored.phase !== 'ready') return;
+    run = stored;
     await acquireNative(run);
-    if (snapshot.generating || !snapshot.hasComposer) return;
+    if (snapshot.generating || !snapshot.hasComposer) {
+      if(!run.waitComposerLogged){run.waitComposerLogged=true;log(run,'Waiting: the composer is not ready on the page');await save(run);}
+      arm(run);
+      return;
+    }
+    run.waitComposerLogged=false;
     if (snapshot.draft) {await pause(run, '网页里有未发送草稿，请先保存或清空再恢复'); return;}
     const current = run.flow.steps[run.index], isRepeat = repeatText !== undefined;
     const pending = {
