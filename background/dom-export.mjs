@@ -2,8 +2,10 @@
 // cards can be inspected without DevTools. The report is downloaded as a text file
 // and never includes conversation messages.
 export function createDomExport({chrome, clock = Date}) {
-  const CAP = 300000;
-  function pageCapture() {
+  // The injected function is serialised without its closure, so every constant
+  // must live inside it.
+  async function pageCapture() {
+    const CAP = 300000;
     const rendered = node => {
       try {
         const rect = node.getBoundingClientRect(), style = getComputedStyle(node);
@@ -37,7 +39,23 @@ export function createDomExport({chrome, clock = Date}) {
       testid: node.getAttribute('data-testid') || '', rendered: rendered(node),
       html: node.outerHTML.slice(0, 300)
     }));
-    return {url: location.href, title: document.title, formPath: path(form), form: form.outerHTML.slice(0, CAP), names, buttons};
+    const roles = [...document.querySelectorAll('[data-message-author-role]')].map(node => node.getAttribute('data-message-author-role'));
+    const roleCounts = roles.reduce((map, role) => (map[role] = (map[role] || 0) + 1, map), {});
+    const turns = [...document.querySelectorAll('[data-testid^="conversation-turn"]')].length;
+    const lastMessages = [...document.querySelectorAll('[data-message-author-role]')].slice(-4).map(node => ({
+      role: node.getAttribute('data-message-author-role'), key: node.getAttribute('data-message-id') || '',
+      text: (node.innerText || '').trim().slice(0, 120), html: node.outerHTML.slice(0, 900)
+    }));
+    let history = null;
+    try {
+      if (!globalThis.PromptChainHistory) history = {error: 'PromptChainHistory missing'};
+      else {
+        const value = await globalThis.PromptChainHistory.read(location.href);
+        history = {url: value.url, messages: (value.messages || []).length, last: (value.messages || []).slice(-3).map(item => ({role: item.role, text: (item.text || '').slice(0, 60), filesText: (item.filesText || '').slice(0, 60)}))};
+      }
+    } catch (error) {history = {error: String((error && error.message) || error)};}
+    return {url: location.href, title: document.title, formPath: path(form), form: form.outerHTML.slice(0, CAP), names, buttons,
+      readers: {roleCounts, turns, lastMessages}, history};
   }
   function render(value) {
     const lines = ['Prompt Chain DOM diagnostic', 'at: ' + new Date(clock.now()).toISOString(),
@@ -46,6 +64,8 @@ export function createDomExport({chrome, clock = Date}) {
     for (const item of value.names || []) lines.push(JSON.stringify(item));
     lines.push('', '=== BUTTONS ===');
     for (const item of value.buttons || []) lines.push(JSON.stringify(item));
+    lines.push('', '=== MESSAGE READER ===', JSON.stringify(value.readers || null, null, 1));
+    lines.push('', '=== HISTORY READER ===', JSON.stringify(value.history || null, null, 1));
     lines.push('', '=== COMPOSER HTML ===', value.form || '');
     return lines.join('\n');
   }
