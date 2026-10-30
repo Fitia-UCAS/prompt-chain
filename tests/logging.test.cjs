@@ -12,6 +12,15 @@ test('控制台统一箭头、标准级别与消息，保留结构化时间，�
  assert.equal(L.reason('SEND_RECEIPT_UNCONFIRMED: Attachment 设定.md was not matched'),'SEND_RECEIPT_UNCONFIRMED: Attachment 设定.md was not matched');
 });
 
+test('等待回答与人工插话使用等待/对话文案，不再误报 EXTENSION_ERROR',()=>{
+ const L=require('../shared/logging.js');
+ assert.equal(L.reason('等待回答内容保持稳定'),'Reply text is still settling');
+ assert.equal(L.reason('对话中出现了其他用户消息，请核对后恢复'),'Another user message appeared; check the conversation before resuming');
+ assert.doesNotMatch(L.reason('等待回答内容保持稳定'),/EXTENSION_ERROR/);
+ assert.match(L.reason('等待新的辅助说明'),/^WAITING_FOR_REPLY: /);
+ assert.match(L.reason('附件恢复关联已经失效'),/^ATTACHMENT_OPERATION_FAILED: /);
+});
+
 test('未知中文原因映射稳定错误码，原始原因与错误码保留在结构化输出',()=>{
   const L=require('../shared/logging.js');
   const error=Object.assign(new Error('附件恢复关联已经失效'),{code:'LINK_EXPIRED'});

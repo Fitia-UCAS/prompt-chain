@@ -1,6 +1,6 @@
 (function(root){
  const levels={info:'INFO',success:'INFO',warn:'WARNING',error:'ERROR'};
- const known={'已手动暂停':'Paused by user','目标页已离开锁定对话':'Target tab changed conversation','网页仍显示停止生成按钮':'Response is still streaming','尚未识别到本轮新回答':'Waiting for a new assistant reply','本轮回答正文仍为空':'Assistant reply is empty','请回到流程锁定的原对话':'Return to the conversation bound to this flow','网页未连接，请刷新目标聊天页面后恢复':'Page disconnected; refresh the target page before resuming','没有找到 DeepSeek 附件区域':'DeepSeek composer attachment area was not found','未找到接收这些附件的唯一 DeepSeek 上传入口':'A unique DeepSeek file input was not found'};
+ const known={'已手动暂停':'Paused by user','目标页已离开锁定对话':'Target tab changed conversation','网页仍显示停止生成按钮':'Response is still streaming','尚未识别到本轮新回答':'Waiting for a new assistant reply','本轮回答正文仍为空':'Assistant reply is empty','等待回答内容保持稳定':'Reply text is still settling','对话中出现了其他用户消息，请核对后恢复':'Another user message appeared; check the conversation before resuming','请回到流程锁定的原对话':'Return to the conversation bound to this flow','网页未连接，请刷新目标聊天页面后恢复':'Page disconnected; refresh the target page before resuming','没有找到 DeepSeek 附件区域':'DeepSeek composer attachment area was not found','未找到接收这些附件的唯一 DeepSeek 上传入口':'A unique DeepSeek file input was not found'};
  const english={
   USER_PAUSED:'Paused by user',
   ATTACHMENT_OPERATION_FAILED:'Attachment operation failed; the original page message is in Diagnostics',
@@ -17,9 +17,13 @@
   UPLOAD_ATTACHMENT_UNIDENTIFIED:'An attachment card is present but its identity could not be confirmed; nothing was sent',
   UPLOAD_PREVIEW_NOT_RECOGNIZED:'No attachment card was observed in the composer search scope',
   ATTACHMENT_CONFLICT:'The composer already contains an attachment that is not part of this step',
-  ATTACHMENT_IDENTITY_UNKNOWN:'An attachment is present but its identity could not be confirmed'
+  ATTACHMENT_IDENTITY_UNKNOWN:'An attachment is present but its identity could not be confirmed',
+  WAITING_FOR_REPLY:'Waiting for the assistant reply',
+  PAGE_LOCK_UNAVAILABLE:'The page did not grant the queue lock; refresh the target page and resume',
+  PAGE_LOCK_TIMEOUT:'The page did not answer the queue lock request'
  };
- const hints=[[/附件|上传|文件/,'ATTACHMENT_OPERATION_FAILED'],[/连接|页面|标签页/,'PAGE_CONNECTION_FAILED'],[/草稿/,'DRAFT_CONFLICT'],[/对话/,'CONVERSATION_CHANGED'],[/登录|注册/,'LOGIN_REQUIRED']];
+ // Waiting reasons are progress, not failures: keep them out of EXTENSION_ERROR.
+ const hints=[[/附件|上传|文件/,'ATTACHMENT_OPERATION_FAILED'],[/连接|页面|标签页/,'PAGE_CONNECTION_FAILED'],[/草稿/,'DRAFT_CONFLICT'],[/对话/,'CONVERSATION_CHANGED'],[/登录|注册/,'LOGIN_REQUIRED'],[/等待|回答|仍在/,'WAITING_FOR_REPLY']];
  const chinese=value=>/[\u3400-\u9fff]/.test(String(value||''));
  function classify(value){
   const error=value instanceof Error?value:null;
