@@ -110,6 +110,29 @@ test('项目页发起：确认送达后升级到带项目名后缀的对话地�
   await h.beat();assert.equal(h.sends.length,2);assert.equal(h.sends[1].url,conversation);
 });
 
+test('项目页发送后网址变成带项目名后缀的对话：恢复时接续该对话且不重发',async()=>{
+  const project='https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b/project';
+  const conversation='https://chatgpt.com/g/g-p-6ac6367e6468819195855069f223562b-webnovel/c/6ae4de92-2a00-83e9-a0a7-887adb60d455';
+  const h=harness({}, {url:project});await h.drain();
+  await h.message('PF_START',{tabId:4,flow:{delaySeconds:0,steps:[{text:'消息一'},{text:'消息二'}]}});await h.drain();
+  const pending=h.shared.pfRun.pending;
+  await h.message('PF_AUTHORIZE_SEND',{runId:pending.runId,operationId:pending.id},true);
+  // Reproduce the paused state an older build left behind: message delivered,
+  // target still the project page.
+  h.shared.pfRun.status='paused';h.shared.pfRun.reason='目标页已离开锁定对话';
+  const snap={url:conversation,hasComposer:true,draft:'',generating:false,lastRole:'assistant',lastUser:{key:'u1',text:'消息一',filesText:''},assistant:{key:'a1',text:'新回答',signature:'a1|新回答'},messages:[{key:'u1',role:'user',fingerprint:'first-user'},{key:'a1',role:'assistant',fingerprint:'first-answer'}],documentId:'doc1',operation:null};
+  const restarted=harness(h.shared,{...snap});await restarted.drain();
+  const resumed=await restarted.message('PF_RESUME');assert.equal(resumed.ok,true);await restarted.drain();
+  assert.equal(restarted.shared.pfRun.status,'running',restarted.shared.pfRun.reason);
+  assert.equal(restarted.shared.pfRun.targetUrl,conversation);
+  assert.equal(restarted.shared.pfRun.phase,'waiting');
+  assert.equal(restarted.sends.length,0);
+  await restarted.beat();restarted.advance(5000);await restarted.beat();
+  assert.equal(restarted.shared.pfRun.index,1);
+  await restarted.beat();
+  assert.equal(restarted.sends.length,1);assert.equal(restarted.sends[0].text,'消息二');
+});
+
 test('旧版因新聊天网址变化而暂停的任务，重启后恢复等待，不重发第一条',async()=>{
   const {h,snap}=await deliveredNewChat();await h.message('PF_PAUSE');
   h.shared.pfRun.reason='目标页已离开锁定对话';
