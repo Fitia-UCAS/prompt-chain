@@ -43,6 +43,7 @@ const suites = [
   { id: 'deepseek.basic', providers: ['deepseek'], kind: 'fixtures', entry: 'workflow page Run button', command: [PY, 'tests/basic-flow-smoke.py', '--provider', 'deepseek'], reports: ['basic-deepseek-report.json'], images: ['basic-deepseek-failure.png','basic-deepseek-panel.png','basic-deepseek-needs-user.png'] },
   { id: 'deepseek.attachment', providers: ['deepseek'], kind: 'fixtures', entry: 'workflow page Run / Resume', command: [PY, 'tests/deepseek-attachment-smoke.py', '--recover'], reports: ['deepseek-attachment-report.json'] },
   { id: 'single-prompt', providers: ['all'], kind: 'fixtures', entry: 'extension sidepanel.html (single prompt)', command: [PY, 'tests/single-prompt-smoke.py', '--truncated'], reports: ['single-prompt-truncated-report.json'] },
+  { id: 'self-test-chain', providers: ['all'], kind: 'fixtures', entry: 'extension side panel', command: [PY, 'tests/self-test-chain-smoke.py'], reports: ['self-test-chain-report.json'] },
   { id: 'native-panel', providers: ['all'], kind: 'fixtures', entry: 'native side panel (Edge)', command: [PY, 'tests/native-sidepanel-smoke.py'], reports: ['native-sidepanel-report.json'] },
   { id: 'connection', providers: ['all'], kind: 'fixtures', entry: 'workflow page connection light', command: [PY, 'tests/connection-state-smoke.py'], reports: ['connection-state-report.json'] },
 ];

@@ -1,4 +1,4 @@
-import {d as listChains} from './assets/storage.js';
+import {d as listChains,c as makeRef,s as saveChain} from './assets/storage.js';
 import {Settings} from './native-settings.js';
 import {PromptSources} from './native-prompt-sources.js';
 import {connect,connection,target} from './native-connection.js';
@@ -8,6 +8,37 @@ let chains=[],run=null,timer,toastTimer;
 function toast(text){clearTimeout(toastTimer);let el=document.getElementById('pc-toast');if(!el){el=document.createElement('div');el.id='pc-toast';el.className='pc-toast';document.body.append(el);}el.replaceChildren(document.createTextNode(text));const close=document.createElement('button');close.textContent='×';close.setAttribute('aria-label','关闭提示');close.onclick=()=>el.remove();el.append(close);toastTimer=setTimeout(()=>el.remove(),5000);}
 const action=callback=>async()=>{try{await callback();}catch(error){if(error.name!=='AbortError')toast(error.message);}};
 const flowId=chainId=>chainId.startsWith('pc-')?chainId.slice(3):'native-'+chainId;
+// The self-test chain ships with the extension: prompts, one attachment, three
+// attachments and a two-file comparison. It is seeded once, then treated like any
+// other chain, so deleting it is final.
+const SELF_TEST={id:'selftest-reading-check',source:'tests/fixtures/self-test/自检链条.md',title:'内置自检 · 提示词与附件'};
+async function seedSelfTest(){
+  if((await chrome.storage.local.get('pcSelfTestSeeded')).pcSelfTestSeeded)return;
+  if((await listChains()).some(chain=>chain.id===SELF_TEST.id)){await chrome.storage.local.set({pcSelfTestSeeded:1});return;}
+  const folder=SELF_TEST.source.replace(/[^/]+$/,'');
+  const read=async name=>{
+    try{const response=await fetch(chrome.runtime.getURL(folder+encodeURIComponent(name)));return response.ok?response:null;}catch{return null;}
+  };
+  const markdown=await read(SELF_TEST.source.slice(folder.length));
+  if(!markdown)return;
+  const parsed=PromptFlowChatImport.parse(await markdown.text());
+  const pending=new Map(),steps=[];
+  for(const step of parsed.steps){
+    const attachments=[];
+    for(const item of step.importAttachments||[]){
+      const response=await read(item.name);
+      if(!response)continue;
+      const file=new File([await response.blob()],item.name,{type:item.mimeType||'text/markdown'});
+      const ref=makeRef(file);
+      pending.set(ref.id,file);
+      attachments.push(ref);
+    }
+    steps.push({content:step.text||'',attachments});
+  }
+  if(!steps.length)return;
+  await saveChain({id:SELF_TEST.id,title:SELF_TEST.title,description:'纯文本、单附件、多附件与对照检查；安装后自带，删除后不再重建。',steps},pending);
+  await chrome.storage.local.set({pcSelfTestSeeded:1});
+}
 async function editFlow(chainId){const result=await rpc('PC_PREPARE',{payload:{chainId}});location.href=chrome.runtime.getURL('workflow.html?flow='+encodeURIComponent(result.flowId));}
 async function refresh(){chains=await listChains();run=(await chrome.storage.local.get('pfRun')).pfRun||null;await connect();schedule();}
 function patch(){
@@ -92,7 +123,7 @@ export async function init(){
     for(const flow of (await S.readLibrary()).flows)if(!before.has(flow.id))await rpc('PC_SYNC_FLOW',{flowId:flow.id});
     await refresh();return{chains:{imported:count,replaced:0,skipped:0,duplicated:0}};
   };
-  await rpc('PC_MIGRATE').catch(error=>toast(error.message));await refresh();
+  await rpc('PC_MIGRATE').catch(error=>toast(error.message));await seedSelfTest().catch(()=>{});await refresh();
   new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['title','data-ready']});
   chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&(changes.langqueue_chains||changes.pfRun))refresh().catch(()=>{});});
   const reconnect=()=>connect().then(schedule).catch(()=>{});

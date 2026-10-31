@@ -55,3 +55,16 @@ profile); `setup` prepares that profile manually.
 真实三站多附件验收需要用户明确提供独立账号/对话、额度及允许的发送条数，不能由夹具通过推断真实网站现状。
 
 `unit` 中的 ai-chat-exporter 联调依赖位于同级的独立仓库 `ai-chat-exporter`；如未提供则明确列为 SKIP，而非算作已验证。
+
+## 内置自检链条（安装自带）
+
+`tests/fixtures/self-test/` 既是自检夹具，也是扩展安装后自带的那条链条的源文件：
+
+- `自检链条.md`：exporter 格式的链条正文（`## User N` / `## ChatGPT N`），6 步分别是纯文本 → 单附件 → 三附件 → 两附件对照 → 纯文本汇总 → 纯文本收尾。
+- `01-阅读范围.md`：单附件步用；带 `ANCHOR-1..4` 标记和 `结束标记：READ-OK-04`，用来核对是否真的读完。
+- `02-甲-清单.md`、`03-乙-清单.md`、`04-丙-清单.md`：多附件步用；只有 `03` 提到「银杉」。
+- `05-对照-规范.md`、`06-对照-旧稿.md`：对照步用；旧稿里有模糊词、复制上次报告等违规项。
+
+侧边栏首次打开时 `native-ui.js` 会把这条链条连同 6 个附件写进 `langqueue_chains` / `langqueue_attachments`，列表里显示「内置自检 · 提示词与附件」；`pcSelfTestSeeded` 置位后不再重建，删掉就是删掉。`scripts/package.py` 会把该目录打进安装包。
+
+`self-test-chain` 套件（`tests/self-test-chain-smoke.py`）在全新 profile 上验证：6 步、附件按引用入库、重开面板不重复播种。
