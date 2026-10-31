@@ -40,6 +40,66 @@ async function seedSelfTest(){
   await chrome.storage.local.set({pcSelfTestSeeded:1});
 }
 async function editFlow(chainId){const result=await rpc('PC_PREPARE',{payload:{chainId}});location.href=chrome.runtime.getURL('workflow.html?flow='+encodeURIComponent(result.flowId));}
+// Shift+↑/↓ moves the card that was clicked last, then renumbers the list.
+const PROMPT_SORT=(a,b)=>{
+  const custom=(a.order??Number.MIN_SAFE_INTEGER)-(b.order??Number.MIN_SAFE_INTEGER);if(custom!==0)return custom;
+  const used=(b.lastUsedAt??0)-(a.lastUsedAt??0);if(used!==0)return used;
+  const edited=(b.updatedAt??0)-(a.updatedAt??0);if(edited!==0)return edited;
+  return (b.createdAt??0)-(a.createdAt??0);
+};
+let activeTarget=null;
+const cardOf=node=>node?.closest?.('.prompt-card,.chain-card')||null;
+const identity=card=>card.matches('.chain-card')?{kind:'chain',id:card.dataset.chainId||''}:{kind:'prompt',id:card.dataset.promptId||''};
+function findCard(target){
+  if(!target?.id)return null;
+  const selector=target.kind==='chain'?`.chain-card[data-chain-id="${CSS.escape(target.id)}"]`:`[data-prompt-id="${CSS.escape(target.id)}"]`;
+  return document.querySelector(selector);
+}
+async function movePrompt(id,neighborId){
+  const stored=(await chrome.storage.local.get('langqueue_prompts')).langqueue_prompts,items=stored?.promptsById;
+  if(!items)return false;
+  const order=Object.values(items).sort(PROMPT_SORT).map(item=>item.id);
+  const from=order.indexOf(id),to=order.indexOf(neighborId);
+  if(from<0||to<0)return false;
+  order.splice(from,1);order.splice(to,0,id);
+  order.forEach((key,index)=>{const item=items[key];if(item)item.order=index;});
+  await chrome.storage.local.set({langqueue_prompts:{...stored,meta:{...stored.meta,updatedAt:Date.now()}}});
+  return true;
+}
+async function moveChain(id,neighborId){
+  const stored=(await chrome.storage.local.get('langqueue_chains')).langqueue_chains,items=stored?.items;
+  if(!Array.isArray(items))return false;
+  const from=items.findIndex(item=>item.id===id),to=items.findIndex(item=>item.id===neighborId);
+  if(from<0||to<0)return false;
+  const [item]=items.splice(from,1);items.splice(to,0,item);
+  await chrome.storage.local.set({langqueue_chains:{...stored,version:2,updatedAt:Date.now(),items}});
+  return true;
+}
+async function moveCard(card,direction){
+  const target=identity(card);if(!target.id)return;
+  const siblings=[...card.parentElement.children].filter(node=>node.matches('.prompt-card,.chain-card'));
+  const neighbor=siblings[siblings.indexOf(card)+direction];
+  if(!neighbor)return;
+  const other=identity(neighbor);if(!other.id||other.kind!==target.kind)return;
+  const moved=target.kind==='chain'?await moveChain(target.id,other.id):await movePrompt(target.id,other.id);
+  if(!moved)return;
+  activeTarget=target;
+  await rpc('PC_PANEL_REFRESH').catch(()=>{});
+}
+function setupCardReorder(){
+  const remember=node=>{const card=cardOf(node);if(!card)return;const found=identity(card);if(found.id)activeTarget=found;};
+  document.addEventListener('pointerdown',event=>remember(event.target),true);
+  document.addEventListener('focusin',event=>remember(event.target));
+  document.addEventListener('keydown',event=>{
+    if(!event.shiftKey||event.ctrlKey||event.metaKey||event.altKey)return;
+    if(event.key!=='ArrowUp'&&event.key!=='ArrowDown')return;
+    if(event.target?.closest?.('input,textarea,select,[contenteditable="true"]'))return;
+    const card=cardOf(document.activeElement)||findCard(activeTarget);
+    if(!card)return;
+    event.preventDefault();event.stopPropagation();
+    moveCard(card,event.key==='ArrowUp'?-1:1).catch(error=>toast(error.message));
+  },true);
+}
 async function refresh(){chains=await listChains();run=(await chrome.storage.local.get('pfRun')).pfRun||null;await connect();schedule();}
 function patch(){
   const exporting=[...document.querySelectorAll('.popup-footer button')].find(button=>button.textContent.trim()==='导出'),exportSvg=exporting?.querySelector('svg');
@@ -123,7 +183,7 @@ export async function init(){
     for(const flow of (await S.readLibrary()).flows)if(!before.has(flow.id))await rpc('PC_SYNC_FLOW',{flowId:flow.id});
     await refresh();return{chains:{imported:count,replaced:0,skipped:0,duplicated:0}};
   };
-  await rpc('PC_MIGRATE').catch(error=>toast(error.message));await seedSelfTest().catch(()=>{});await refresh();
+  await rpc('PC_MIGRATE').catch(error=>toast(error.message));await seedSelfTest().catch(()=>{});setupCardReorder();await refresh();
   new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['title','data-ready']});
   chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&(changes.langqueue_chains||changes.pfRun))refresh().catch(()=>{});});
   const reconnect=()=>connect().then(schedule).catch(()=>{});

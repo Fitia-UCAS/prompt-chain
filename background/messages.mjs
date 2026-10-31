@@ -40,6 +40,13 @@ export function createMessageHandler({chrome, model: M, store: S, runs, connecti
       return{diagnostic:result};
     }
     if(message.type==='PC_MIGRATE'){if(!uiSender(sender))throw new Error('只能在侧边栏迁移');return{count:await native.migrate()};}
+    if(message.type==='PC_PANEL_REFRESH'){
+      if(!uiSender(sender))throw new Error('只能在侧边栏刷新列表');
+      // The panel does not watch chrome.storage; ask it to re-read through the
+      // message it already handles.
+      await Promise.resolve(chrome.runtime.sendMessage({type:'PROMPTS_IMPORTED'})).catch(()=>{});
+      return{};
+    }
     if(message.type==='PC_SYNC_FLOW'){
       if(!uiSender(sender))throw new Error('只能在侧边栏保存');
       const flow=(await S.readLibrary()).flows.find(f=>f.id===message.flowId);if(!flow)throw new Error('找不到流程');

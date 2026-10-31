@@ -131,3 +131,27 @@ def patch_css_compat():
    if old in s and new not in s:s=s.replace(old,new)
   p.write_text(s,encoding='utf-8')
 patch_css_compat()
+
+# Card reordering (native-ui.js) needs the prompt id on the card, an explicit
+# order in the recent-sort comparator, and the field kept by the prompt validator.
+def patch_reorder():
+ p=root/'assets/native-panel.js';s=p.read_text(encoding='utf-8')
+ old='className:"prompt-card","data-enabled":b,children:['
+ new='className:"prompt-card","data-enabled":b,"data-prompt-id":i.id,children:['
+ if new not in s:
+  if old not in s:raise RuntimeError('Prompt card markup changed')
+  s=s.replace(old,new,1)
+ old='default:d.sort((u,h)=>{const E=(h.lastUsedAt??0)-(u.lastUsedAt??0);if(E!==0)return E;'
+ new='default:d.sort((u,h)=>{const L=(u.order??Number.MIN_SAFE_INTEGER)-(h.order??Number.MIN_SAFE_INTEGER);if(L!==0)return L;const E=(h.lastUsedAt??0)-(u.lastUsedAt??0);if(E!==0)return E;'
+ if new not in s:
+  if old not in s:raise RuntimeError('Recent sort comparator changed')
+  s=s.replace(old,new,1)
+ p.write_text(s,encoding='utf-8')
+ p=root/'assets/storage.js';s=p.read_text(encoding='utf-8')
+ old='lastUsedAt:typeof e.lastUsedAt=="number"?e.lastUsedAt:void 0}}'
+ new='lastUsedAt:typeof e.lastUsedAt=="number"?e.lastUsedAt:void 0,order:typeof e.order=="number"?e.order:void 0}}'
+ if new not in s:
+  if old not in s:raise RuntimeError('Prompt validator changed')
+  s=s.replace(old,new,1)
+ p.write_text(s,encoding='utf-8')
+patch_reorder()
