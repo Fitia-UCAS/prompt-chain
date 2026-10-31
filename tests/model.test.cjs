@@ -53,6 +53,25 @@ test('消息核对支持 Markdown 展示、全角字符和换行重排，保留�
   assert.equal(M.receipt({lastUser:{key:'new',text:'First sentence. Next sentence.'}},{text:'First sentence.\nNext sentence.'}),true);
 });
 
+test('ChatGPT 反引号被渲染掉、列表编号仍在时，附件别名回执应完整匹配',()=>{
+  const text='这份文件只发一次。请从头到尾完整读完，不要跳读，也不要用检索的方式只挑关键词。\n\n读完后告诉我三件事：\n\n1. 你实际读到的起止行号；\n2. 文件里一共出现了几个 `ANCHOR-` 标记，按顺序写出来；\n3. 文件最后一行的原文。\n\n没有读完就直接说没读完。';
+  // Reported failure: expected lengths 122/127/111/116, observed 120/125,
+  // and the first mismatch at the opening ` before ANCHOR-.
+  const rendered=text.replaceAll('`','');
+  const before=[{key:'m:previous:user',role:'user',fingerprint:'previous-u'},{key:'m:previous:assistant',role:'assistant',fingerprint:'previous-a'}];
+  const attachment={id:'file-1',name:'01-阅读范围.md',mimeType:'text/markdown'};
+  const pending={url,text,attachment,attachments:[attachment],attachmentAliases:['01-阅读范围(2).md'],baselineUserKey:'m:previous:user',baselineAssistantKey:'m:previous:assistant',baselineMessages:before,attemptedAt:1};
+  const user={key:'m:new:user',text:rendered,variants:[rendered],filesText:'01-阅读范围(2).md'};
+  const snapshot={url,lastRole:'assistant',lastUser:user,messages:[...before,{key:user.key,role:'user',fingerprint:'new-u'},{key:'m:new:assistant',role:'assistant',fingerprint:'new-a'}]};
+  assert.deepEqual([M.semanticText(rendered).length,rendered.normalize('NFKC').replace(/\s+/g,' ').trim().length],[120,125]);
+  assert.equal(M.receiptText(snapshot,pending).matched,true);
+  assert.equal(M.receipt(snapshot,pending),true);
+  assert.equal(M.receipt({...snapshot,lastUser:{...user,text:rendered.replace('没有读完','已经读完'),variants:[rendered.replace('没有读完','已经读完')]}},pending),false,'不能接受被篡改的正文');
+  assert.equal(M.receipt({...snapshot,lastUser:{...user,filesText:'其他文件.md'}},pending),false,'仍须核对附件显示名');
+  assert.equal(M.receipt({...snapshot,messages:[{key:'intruder',role:'user'},...snapshot.messages]},pending),true,'历史前面的消息不影响锚点后的唯一性');
+  assert.equal(M.receipt({...snapshot,messages:[...before,{key:'intruder',role:'user'},...snapshot.messages.slice(before.length)]},pending),false,'新消息前的额外用户插话不可放行');
+});
+
 test('折叠预览必须有足够正文、明确折叠标记和发送前消息位置，旧消息与其他新用户均不放行',()=>{
   const text='请完整阅读这份文件，并在阅读后如实报告进度。'.repeat(12);
   const before=[{key:'u0',role:'user',fingerprint:'old-user'},{key:'a0',role:'assistant',fingerprint:'old-answer'}];

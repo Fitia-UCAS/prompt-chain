@@ -87,7 +87,12 @@
       return /^(paragraph|heading|blockquote)$/.test(token.type)?'\n'+text+'\n':text;
     }).join('');}
     let plain=raw;try{if(root.marked?.lexer)plain=walk(root.marked.lexer(raw));}catch{}
-    const result=[...new Set([raw,plain].flatMap(text=>[semanticText(text),comparison(text).replace(/\s+/g,' ').trim()]).filter(Boolean))];projected.set(raw,result);if(projected.size>8)projected.delete(projected.keys().next().value);return result;
+    // ChatGPT may render inline code without its backticks while keeping ordered
+    // list markers (1., 2., 3.) in a user bubble. The full Markdown projection
+    // removes those list markers as well, so neither raw nor plain would match.
+    // Retain every other character: this is still an exact full-message check.
+    const inlineCode=raw.replace(/(?<![\\`])(`+)([^`\n]+)\1(?!`)/g,'$2');
+    const result=[...new Set([raw,inlineCode,plain].flatMap(text=>[semanticText(text),comparison(text).replace(/\s+/g,' ').trim()]).filter(Boolean))];projected.set(raw,result);if(projected.size>8)projected.delete(projected.keys().next().value);return result;
   }
   function deliveryWindow(snapshot,pending){
     if(!Array.isArray(pending.baselineMessages))return {ok:true};
