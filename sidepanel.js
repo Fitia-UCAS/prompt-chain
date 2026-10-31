@@ -34,7 +34,7 @@ function switchView(next) {
   if(next==='monitor'){displayRun(true);syncReply();}
   else{$('last-reply').textContent='';currentReply=null;}
 }
-async function syncReply(){const request=++replyRequest;try{const result=await rpc('PF_CURRENT_REPLY');if(request===replyRequest&&result.view?.runId===runState?.id&&result.view.index<=runState.index){currentReply=result.view;if(view==='monitor')displayRun();}}catch{}}
+async function syncReply(){const request=++replyRequest;try{const result=await rpc('PF_CURRENT_REPLY');if(request===replyRequest&&result.view?.runId===runState?.id&&result.view.index===runState.index){currentReply=result.view;if(view==='monitor')displayRun();}}catch{}}
 function displayLibrary() {
   const query = $('search').value.trim().toLowerCase();
   const flows = library.flows.filter(f => [f.title,f.description,...f.steps.flatMap(s=>[s.title,s.text,...(s.attachments||[]).map(a=>a.name),...(s.missingAttachments||[]).map(a=>a.name)])].filter(Boolean).join(' ').toLowerCase().includes(query));
@@ -142,9 +142,9 @@ function displayRun(followCurrent=false) {
     else{const next=[...logs.children].find(node=>node.dataset.logKey===anchorKey);if(next)logs.scrollTop+=next.getBoundingClientRect().top-top;}
   }
   const provider=M.platforms.names[M.platforms.providerFor(r.targetUrl)]||'';
-  $('reply-title').textContent=provider;
+  $('reply-title').textContent=provider?provider+' · 第 '+(r.index+1)+' 步':'';
   const reading=M.ACTIVE.has(r.status);
-  if(!reading||currentReply?.runId!==r.id||currentReply.index>r.index)currentReply=null;
+  if(!reading||currentReply?.runId!==r.id||currentReply.index!==r.index)currentReply=null;
   $('last-reply').textContent=currentReply?.text?.replace(/\n[ \t]*\n(?:[ \t]*\n)+/g,'\n\n')||'';
   $('run').disabled = M.ACTIVE.has(r.status);
 }
@@ -371,7 +371,7 @@ chrome.storage.onChanged.addListener((changes,area)=>{
   if(changes.pfLibrary){library=changes.pfLibrary.newValue;displayLibrary();}
   if(changes.pfTrash){trash=changes.pfTrash.newValue||[];displayTrash();}
 });
-chrome.runtime.onMessage.addListener(message=>{if(message?.type==='PF_REPLY_VIEW'&&runState&&message.view?.runId===runState.id&&message.view.index<=runState.index){replyRequest++;currentReply=message.view;if(view==='monitor')displayRun();}});
+chrome.runtime.onMessage.addListener(message=>{if(message?.type==='PF_REPLY_VIEW'&&runState&&message.view?.runId===runState.id&&message.view.index===runState.index){replyRequest++;currentReply=message.view;if(view==='monitor')displayRun();}});
 chrome.tabs.onActivated.addListener(()=>refreshTabs().catch(()=>{}));
 chrome.tabs.onRemoved.addListener(id=>{if(runState&&id===runState.tabId){connectionSeq++;paintConnection(false);}refreshTabs().catch(()=>{});});
 chrome.tabs.onUpdated.addListener((id,info)=>{if(id===runState?.tabId&&info.url){connectionSeq++;paintConnection(false);}if(info.status==='complete'||info.url)refreshTabs().catch(()=>{});});
