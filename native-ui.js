@@ -86,8 +86,13 @@ async function moveCard(card,direction){
   activeTarget=target;
   await rpc('PC_PANEL_REFRESH').catch(()=>{});
 }
+function markSelected(){
+  for(const node of document.querySelectorAll('[data-pc-selected]'))node.removeAttribute('data-pc-selected');
+  const card=findCard(activeTarget);
+  if(card)card.setAttribute('data-pc-selected','true');
+}
 function setupCardReorder(){
-  const remember=node=>{const card=cardOf(node);if(!card)return;const found=identity(card);if(found.id)activeTarget=found;};
+  const remember=node=>{const card=cardOf(node);if(!card)return;const found=identity(card);if(!found.id)return;activeTarget=found;markSelected();};
   document.addEventListener('pointerdown',event=>remember(event.target),true);
   document.addEventListener('focusin',event=>remember(event.target));
   document.addEventListener('keydown',event=>{
@@ -125,6 +130,7 @@ function patch(){
     pause.onclick=action(async()=>{await rpc('PF_STOP');await refresh();});
   });
   for(const el of document.querySelectorAll('[title]'))el.removeAttribute('title');
+  markSelected();
   const header=document.querySelector('.popup-header .platform-status');
   document.getElementById('pc-run')?.remove();
   if(header){

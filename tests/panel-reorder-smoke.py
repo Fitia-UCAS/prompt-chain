@@ -46,7 +46,17 @@ with TemporaryDirectory(prefix='pc-reorder-',dir=str(OUT)) as profile:
    chain_titles=lambda: page.locator('.chain-card .chain-number').all_inner_texts()
    assert chain_titles()==['01','02','03'],chain_titles()
 
+   selected=lambda: page.locator('[data-pc-selected="true"]').count()
+   assert selected()==0,selected()
    page.locator('.chain-card').nth(2).click()
+   page.wait_for_timeout(200)
+   assert selected()==1,selected()
+   assert page.locator('.chain-card[data-pc-selected="true"]').get_attribute('data-chain-id')=='c3'
+   edge=lambda selector: page.locator(selector).first.evaluate("el=>({width:getComputedStyle(el).borderLeftWidth,color:getComputedStyle(el).borderLeftColor})")
+   picked=edge('.chain-card[data-pc-selected="true"]')
+   plain_card=edge('.chain-card:not([data-pc-selected])')
+   assert picked['width']=='3px' and plain_card['width']=='3px',(picked,plain_card)
+   assert picked['color']!=plain_card['color'],(picked,plain_card)
    page.keyboard.press('Shift+ArrowUp')
    page.wait_for_timeout(600)
    assert worker.evaluate(READ)['chains']==['c1','c3','c2'],worker.evaluate(READ)
@@ -70,6 +80,8 @@ with TemporaryDirectory(prefix='pc-reorder-',dir=str(OUT)) as profile:
    assert [state['p1']['order'],state['p2']['order'],state['p3']['order']]==[2,0,1],state
    assert prompt_titles()==['乙提示词','丙提示词','甲提示词'],prompt_titles()
    assert prompt_index()==['01','02','03'],prompt_index()
+   assert page.locator('.prompt-card[data-pc-selected="true"] .prompt-title').inner_text()=='乙提示词'
+   assert selected()==1,selected()
 
    page.reload()
    page.locator('.chain-card').first.wait_for(timeout=10000)
@@ -77,7 +89,7 @@ with TemporaryDirectory(prefix='pc-reorder-',dir=str(OUT)) as profile:
    assert page.locator('.chain-card').first.get_attribute('data-chain-id')=='c3'
    assert prompt_titles()==['乙提示词','丙提示词','甲提示词'],prompt_titles()
    assert not errors,errors
-   report.update({'ok':True,'checks':['Shift+ArrowUp moves the clicked chain one slot and keeps 01/02/03 numbering','Shift+ArrowUp moves the clicked prompt and writes explicit order fields','order survives reopening the panel']})
+   report.update({'ok':True,'checks':['Clicking a card marks it selected: 3px left edge turns accent, only one card at a time','Shift+ArrowUp moves the clicked chain one slot and keeps 01/02/03 numbering','Shift+ArrowUp moves the clicked prompt and writes explicit order fields','order survives reopening the panel']})
   finally:
    context.close()
 (OUT/'panel-reorder-report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
