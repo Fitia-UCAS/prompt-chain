@@ -28,7 +28,7 @@ export function createConnection({chrome, model: M, runs, native, clock: Date = 
     try {
       let response = await ask(tabId);
       if (!response?.ok) throw failure('WEB_NOT_CONNECTED','The page did not answer the extension status request');
-      if(response.snapshot.reader?.version!==9||response.snapshot.engineVersion!==10){
+      if(response.snapshot.reader?.version!==10||response.snapshot.engineVersion!==11){
         const tab=await chrome.tabs.get(tabId);if(!M.allowedUrl(tab.url))throw new Error('目标页已离开支持的聊天网站');
         await chrome.scripting.executeScript({target:{tabId},files:['vendor/marked/marked.min.js','shared/platforms.js','shared/model.js','content/history-reader.js','content/site-messages.js','content/message-reader.js','content/supervisor-engine.js']});
         response=await ask(tabId);if(!response?.ok)throw new Error('读取器更新后未连接');

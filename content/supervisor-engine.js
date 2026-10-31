@@ -1,5 +1,5 @@
 (() => {
-if (globalThis.PromptFlowSupervisor?.engineVersion===10) return;
+if (globalThis.PromptFlowSupervisor?.engineVersion===11) return;
 const SETTLE_SAMPLE_MS=850;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const clean=x=>String(x||'').replace(/\u00a0/g,' ').replace(/\r\n?/g,'\n').trim();
@@ -14,7 +14,12 @@ const key=node=>R.read().messages.find(message=>message.node===node)?.key||'';
 const text=node=>R.texts(node,messageRole(node))[0]||'';
 function generationSignals(){
   const selectors=['[data-testid="stop-button"]','[data-testid="fruitjuice-stop-button"]','button[aria-label*="Stop" i]','button[aria-label*="停止"]','button[title*="Stop" i]','button[title*="停止"]','[role="button"][aria-label*="Stop" i]','[role="button"][aria-label*="停止"]','.send-button.stop'];
-  return selectors.filter(selector=>[...document.querySelectorAll(selector)].some(rendered));
+  const signals=selectors.filter(selector=>[...document.querySelectorAll(selector)].some(rendered));
+  // During multi-stage thinking the stop button may temporarily disappear.
+  // ChatGPT's visible "跳过" control still means reasoning has not finished.
+  if(PromptFlowModel.platforms.providerFor(location.href)==='chatgpt'&&
+      [...document.querySelectorAll('main button,main [role="button"]')].some(node=>rendered(node)&&/^(?:跳过|Skip)$/i.test(clean(node.getAttribute('aria-label')||node.innerText||node.textContent))))signals.push('thinking-skip-control');
+  return signals;
 }
 const generating=()=>generationSignals().length>0;
 function assistantSignature(){const message=R.read().messages.filter(message=>message.role==='assistant').at(-1);return message?message.key+'|'+message.fingerprint:'';}
@@ -399,11 +404,11 @@ function snapshot() {
   const errorText=assistantText+'\n'+alerts;
   const error=/(?:something went wrong|error generating|network error|conversation.*limit|unable to load conversation|出现(?:了)?错误|生成.*出错|已达到.*(?:上限|限制)|达到.*对话.*上限|请求过于频繁|消息.*限额|you.ve reached.*limit)/i.test(errorText)?clean(errorText).slice(-650):'';
   const c=composer(),signals=generationSignals();
-  return {url:location.href,engineVersion:10,provider:PromptFlowModel.platforms.providerFor(location.href),hasComposer:!!c,draft:c?ctext(c):'',generating:signals.length>0,generationSignals:signals,generationStrategy:'visible-stop-buttons',lastRole:all.at(-1)?.role||'',
+  return {url:location.href,engineVersion:11,provider:PromptFlowModel.platforms.providerFor(location.href),hasComposer:!!c,draft:c?ctext(c):'',generating:signals.length>0,generationSignals:signals,generationStrategy:'visible-stop-buttons',lastRole:all.at(-1)?.role||'',
     lastUser:user?{key:user.key,text:user.text,variants:user.variants,fingerprint:user.fingerprint,folded:user.folded,filesText:describe(user.root)+'\n'+(user.files||[]).join('\n'),imageCount:[...user.root.querySelectorAll('img')].filter(image=>rendered(image)&&rect(image).width>=60&&rect(image).height>=60).length}:null,
     assistant:assistant?{key:assistant.key,text:assistantText,signature:assistant.key+'|'+assistant.fingerprint}:null,upload:globalThis.PromptChainSiteAdapter?.uploadDiagnostic?.()||globalThis.PromptChainFileUI?.uploadDiagnostic?.()||null,
     messages:all.slice(-200).map(({key,role,fingerprint})=>({key,role,fingerprint})),reader:{version:R.version,strategy:scan.strategy,probe:scan.probe,count:all.length,users:all.filter(message=>message.role==='user').length,assistants:all.filter(message=>message.role==='assistant').length},error};
 }
 
-globalThis.PromptFlowSupervisor=Object.assign(globalThis.PromptFlowSupervisor||{},{msgs,messageRole,key,text,composer,ctext,fill,sendBtn,generating,assistantReplySettled,snapshot,scope,describe,rendered,sleep,readerVersion:9,engineVersion:10,attachmentRoots,attachmentSeeds,scanAttachment,scanAttachmentSet,attachmentCardCount,attachmentNameSample});
+globalThis.PromptFlowSupervisor=Object.assign(globalThis.PromptFlowSupervisor||{},{msgs,messageRole,key,text,composer,ctext,fill,sendBtn,generating,assistantReplySettled,snapshot,scope,describe,rendered,sleep,readerVersion:10,engineVersion:11,attachmentRoots,attachmentSeeds,scanAttachment,scanAttachmentSet,attachmentCardCount,attachmentNameSample});
 })();

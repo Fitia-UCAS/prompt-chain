@@ -1,5 +1,5 @@
 (() => {
-  if(globalThis.PromptChainMessages?.version===9)return;
+  if(globalThis.PromptChainMessages?.version===10)return;
   const M=PromptFlowModel;
   const ATTRS=['data-message-author-role','data-message-role','data-turn-role','data-author-role','data-conversation-role','data-turn','data-author','data-role'];
   const MARKED=ATTRS.map(name=>'['+name+']').join(',');
@@ -15,6 +15,26 @@
   const LABEL_PREFIX=/^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]\s*(?:You|ChatGPT)?[ \t]*\n?/i;
   const HEADINGS='h1,h2,h3,h4,h5,h6,[role="heading"],[data-conversation-role],.sr-only';
   const UI='button,[role="button"],script,style,template,svg,.sr-only,[hidden],[aria-hidden="true"]';
+  // ChatGPT renders live reasoning (sometimes inside a hidden MarkdownRoot) before
+  // inserting the final assistant header. Never treat that DOM as an answer.
+  const NON_FINAL='[hidden],[aria-hidden="true"],[inert],[data-testid*="reasoning" i],[data-testid*="thinking" i],[data-testid*="chain-of-thought" i]';
+  const nonFinal=node=>!!node?.closest?.(NON_FINAL);
+  function finalAssistant(node){
+    if(nonFinal(node))return false;
+    const turn=node.closest(TURNS);if(!turn)return true;
+    const speakers=speakerLabels(turn);
+    const finalHeader=speakers.filter(label=>labelRole(label)==='assistant').at(-1);
+    // Even after the answer begins, reasoning text that precedes the final
+    // assistant heading can remain mounted (and occasionally visible).
+    if(finalHeader&&!node.contains(finalHeader)&&(node.compareDocumentPosition(finalHeader)&Node.DOCUMENT_POSITION_FOLLOWING))return false;
+    // A user turn may already contain the thinking MarkdownRoot, but it has no
+    // assistant heading yet. Explicitly authored assistant containers remain valid.
+    if(speakers.some(label=>labelRole(label)==='user')&&!speakers.some(label=>labelRole(label)==='assistant')){
+      const owner=node.closest('[data-message-author-role="assistant"],[data-message-role="assistant"],[data-testid="assistant-message"]');
+      return !!owner;
+    }
+    return true;
+  }
   const clean=value=>String(value||'').replace(/\r\n?/g,'\n').trim();
   function declared(node){
     for(const name of ATTRS){const value=node?.getAttribute?.(name)?.toLowerCase();if(['user','human'].includes(value))return'user';if(['assistant','agent','chatgpt'].includes(value))return'assistant';}
@@ -40,7 +60,7 @@
   // A turn holds both bodies; an answer nested inside a user bubble does not count.
   function bodies(node){
     const user=node.querySelector?.(USER)||null;
-    const answer=[...(node.querySelectorAll?.(ASSISTANT)||[])].find(el=>!el.closest(USER))||null;
+    const answer=[...(node.querySelectorAll?.(ASSISTANT)||[])].find(el=>!el.closest(USER)&&!nonFinal(el))||null;
     return {user,answer};
   }
   function role(node){
@@ -52,6 +72,7 @@
   }
   function body(node,kind){
     const preferred=kind==='user'?USER+',.whitespace-pre-wrap':ASSISTANT+',.markdown,.prose';
+    if(kind==='assistant')return node.matches(preferred)&&!nonFinal(node)?node:[...node.querySelectorAll(preferred)].find(el=>!nonFinal(el))||node;
     return node.matches(preferred)?node:node.querySelector(preferred)||node;
   }
   function plain(node){
@@ -161,20 +182,23 @@
       if(pair.user&&pair.answer)continue;
       if(candidate.matches(ASSISTANT)&&(candidate.querySelector(USER)||[...candidate.querySelectorAll(MARKED)].some(marked=>declared(marked)==='user')))continue;
       const kind=role(candidate);
+      if(kind==='assistant'&&!finalAssistant(candidate))continue;
       if(kind==='assistant'&&candidate.matches('.markdown,.prose'))bodyFallback=true;
       if(kind)roots.set(candidate,kind);
     }
     for(const heading of speakerLabels(main)){
       const kind=labelRole(heading),root=kind?labelRoot(heading,kind):null;headingCount++;
-      if(root)roots.set(root,kind);
+      if(root&&(kind!=='assistant'||finalAssistant(root)))roots.set(root,kind);
     }
-    for(const button of main.querySelectorAll(ANSWER_ACTIONS)){const candidate=actionRoot(button);if(candidate){roots.set(candidate,'assistant');bodyFallback=true;}}
+    for(const button of main.querySelectorAll(ANSWER_ACTIONS)){const candidate=actionRoot(button);if(candidate&&finalAssistant(candidate)){roots.set(candidate,'assistant');bodyFallback=true;}}
     }
     const ordered=[...roots.keys()].filter(node=>![...roots.keys()].some(parent=>parent!==node&&parent.contains(node)&&roots.get(parent)===roots.get(node)))
       .sort((a,b)=>{if(a===b)return 0;const left=composedPath(a),right=composedPath(b);let index=0;while(index<Math.min(left.length,right.length)&&left[index]===right[index])index++;if(index===left.length)return-1;if(index===right.length)return 1;return left[index].compareDocumentPosition(right[index])&Node.DOCUMENT_POSITION_FOLLOWING?-1:1;});
     const occurrences=new Map(),messages=[];
     for(const node of ordered){
-      const kind=roots.get(node),variants=texts(node,kind),text=variants[0]||'';
+      const kind=roots.get(node);
+      if(kind==='assistant'&&!finalAssistant(node))continue;
+      const variants=texts(node,kind),text=variants[0]||'';
       if(kind==='assistant'&&!text)continue;
       const fingerprint=M.fingerprint(kind+'\n'+text),occurrence=(occurrences.get(fingerprint)||0)+1;occurrences.set(fingerprint,occurrence);
       const testId=node.getAttribute('data-testid')||'';
@@ -189,5 +213,5 @@
     const probe={scopes:allScopes.length,mainElements:document.querySelectorAll('main').length};for(const [name,selector]of Object.entries(selectors))probe[name]=allScopes.reduce((count,scope)=>count+scope.querySelectorAll(selector).length,0);
     return{messages,strategy:headingCount?'speaker-labels':bodyFallback?'body-containers':'role-attributes',probe};
   }
-  globalThis.PromptChainMessages=Object.assign(globalThis.PromptChainMessages||{},{read,role,texts,version:9});
+  globalThis.PromptChainMessages=Object.assign(globalThis.PromptChainMessages||{},{read,role,texts,version:10});
 })();
