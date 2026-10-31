@@ -11,7 +11,7 @@ for (const provider of ['gemini', 'deepseek']) {
   test(`${provider} 重连会修复缺失脚本，输入框不可用则明确失败`, async () => {
     let ready = false, injects = 0, sends = 0;
     const url = provider === 'gemini' ? 'https://gemini.google.com/app?dest=create' : 'https://chat.deepseek.com/';
-    const chrome = {tabs: {async get() {return {id: 2, url};}, async sendMessage(_id, message) {if(message.type==='PF_STATUS')return{ok:true,snapshot:{url,hasComposer:true,engineVersion:10,reader:{version:7,users:0,assistants:0}}};sends++; return {ok: true, result: {ready}};}},
+    const chrome = {tabs: {async get() {return {id: 2, url};}, async sendMessage(_id, message) {if(message.type==='PF_STATUS')return{ok:true,snapshot:{url,hasComposer:true,engineVersion:10,reader:{version:8,users:0,assistants:0}}};sends++; return {ok: true, result: {ready}};}},
       scripting: {async executeScript() {injects++; ready = true;}}};
     const connection = createConnection({chrome, model: M, runs: {getRun: async()=>null}, sleep: async () => {}});
     assert.equal((await connection.connect(2)).hasComposer, true);

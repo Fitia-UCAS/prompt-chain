@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 from playwright.sync_api import sync_playwright
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -30,7 +31,7 @@ document.querySelector('[data-testid="fruitjuice-send-button"]').onclick=()=>{
 results=[]
 with sync_playwright() as p:
  browser=p.chromium.launch(executable_path=str(EDGE),headless=True)
- for mode in ['bare','bare_user','h2','ids','actions','shadow','project','attribute','rich','folded','attachment','image','busy','turns','pair']:
+ for mode in ['bare','bare_user','h2','ids','actions','shadow','project','project_split','attribute','rich','folded','attachment','image','busy','turns','pair']:
   page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.route('https://chatgpt.com/**',lambda route:route.fulfill(status=200,content_type='text/html',body=HTML))
   page.goto('https://chatgpt.com/c/message-reader')
@@ -47,6 +48,10 @@ with sync_playwright() as p:
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-turn-key="t1"><div data-conversation-role="user"><div data-user-message-bubble>历史问题</div></div></div><div data-turn-key="t2"><div data-conversation-role="assistant"><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">历史回答</p></div></div></div></div>'}''')
   if mode=='pair':
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-turn-key="t1"><div data-conversation-role="user"><div data-user-message-bubble>历史问题</div></div><div data-conversation-role="assistant"><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">历史回答</p></div></div></div></div>'}''')
+  if mode=='project':
+   page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-turn-key="t1"><div class="group"><h4 data-conversation-role="user">你说：</h4><div data-user-message-bubble>历史问题</div></div><div class="group"><h4 data-conversation-role="assistant">ChatGPT 说：</h4><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">历史回答</p></div></div></div></div>'}''')
+  if mode=='project_split':
+   page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-turn-key="t1"><div class="group"><div data-user-message-bubble>历史问题</div></div><div class="group"><h4 data-conversation-role="assistant">ChatGPT 说：</h4></div><div class="group"><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">历史回答</p></div></div></div></div>'}''')
   if mode=='shadow':
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<div id="conversation-shadow"></div>';document.querySelector('#conversation-shadow').attachShadow({mode:'open'}).innerHTML='<section><div data-user-message-bubble>历史问题</div></section><section><div class="markdown prose">历史回答</div></section>'}''')
   for file in ['vendor/marked/marked.min.js','shared/platforms.js','shared/model.js','content/message-reader.js','content/supervisor-engine.js','content/bridge.js']:page.add_script_tag(path=str(ROOT/file))
@@ -57,8 +62,9 @@ with sync_playwright() as p:
    assert page.evaluate('PromptFlowSupervisor.snapshot().generating')
    page.evaluate("document.querySelector('#real-stop').remove()")
   before=page.evaluate('PromptFlowSupervisor.snapshot()')
-  assert before['lastRole']=='assistant' and before['lastUser']['text']=='历史问题',before
+  assert before['lastRole']=='assistant' and (before['lastUser'] or {}).get('text')=='历史问题',(mode,before)
   assert before['reader']['users']==1 and before['reader']['assistants']==1,before
+  if mode.startswith('project'):assert before['assistant']['text']=='历史回答',before
   text='' if mode=='attachment' else '# 文件要求\n\n1. **完整阅读**，不要遗漏。\n2. 保留 foo bar，保持ＡＢＣ全角原文。'
   if mode=='folded':text='请从头到尾完整阅读文件，并如实报告实际阅读范围。'*15
   operation={'id':mode,'runId':'reader-run','url':page.url,'text':text,'baselineUserKey':before['lastUser']['key'],'baselineAssistantKey':before['assistant']['key'],'baselineMessages':before['messages']}
@@ -69,6 +75,8 @@ with sync_playwright() as p:
   assert page.evaluate('clicks')==1
   snap=result['snapshot'];assert snap['lastRole']=='assistant'
   assert '本轮文件已收到' in snap['assistant']['text'] and '复制' not in snap['assistant']['text']
+  # Only a leading speaker label is UI; a quote like "ChatGPT 说：…" inside the answer is real content.
+  assert not re.match(r'^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]', snap['assistant']['text']),snap['assistant']
   if mode=='attachment':assert '原文.md' in snap['lastUser']['filesText']
   if mode=='image':
    assert snap['lastUser']['imageCount']==1,snap

@@ -92,8 +92,25 @@ export function createDomExport({chrome, clock = Date}) {
           messages: (value.messages || []).map(item => ({role: item.role, key: item.key, textLength: (item.text || '').length, textHead: (item.text || '').slice(0, 40)}))};
       }
     } catch (error) {selfTest = {error: String((error && error.message) || error)};}
+    const labels = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"],[data-conversation-role]')].slice(0, 12).map(node => ({
+      tag: node.tagName.toLowerCase(), role: node.getAttribute('data-conversation-role') || '',
+      cls: (node.getAttribute('class') || '').split(/\s+/).filter(Boolean)[0] || '',
+      text: (node.textContent || '').trim().slice(0, 40),
+      markdownInside: !!node.querySelector('[class*="MarkdownRoot"]'),
+      userBubbleInside: !!node.querySelector('[data-user-message-bubble],[data-user-message-copy]')
+    }));
+    const turnStructure = [...document.querySelectorAll('[data-turn-key]')].slice(-2).map(turn => ({
+      key: turn.getAttribute('data-turn-key'),
+      children: [...turn.children].map(child => child.tagName.toLowerCase() + '.' + ((child.getAttribute('class') || '').split(/\s+/).filter(Boolean)[0] || '')),
+      nodes: [...turn.querySelectorAll('h1,h2,h3,h4,h5,h6,[data-conversation-role],[class*="MarkdownRoot"],[data-user-message-bubble],[data-markdown-copy-text]')].slice(0, 16).map(node =>
+        node.tagName.toLowerCase() + (node.getAttribute('data-conversation-role') ? '{' + node.getAttribute('data-conversation-role') + '}' : '')
+        + ((node.getAttribute('class') || '').split(/\s+/).filter(Boolean)[0] ? '.' + (node.getAttribute('class') || '').split(/\s+/).filter(Boolean)[0] : '')
+        + ' len=' + (node.textContent || '').length)
+    }));
     const readers = {
       selfTest,
+      labels,
+      turnStructure,
       answerNodes,
       inventory,
       textChains,
@@ -109,25 +126,10 @@ export function createDomExport({chrome, clock = Date}) {
         text: (node.innerText || '').trim().slice(0, 120), html: node.outerHTML.slice(0, 900)
       }))
     };
-    const history = {};
-    try {
-      const session = await fetch('/api/auth/session', {credentials: 'include', cache: 'no-store'});
-      const sessionBody = await session.json().catch(() => null);
-      const token = sessionBody?.accessToken || '';
-      history.session = {status: session.status, token: !!token};
-      const match = /\/c\/([^/]+)\/?$/.exec(location.pathname);
-      if (!match) history.error = 'no conversation id in the URL';
-      else {
-        for (const withToken of [true, false]) {
-          const response = await fetch('/backend-api/conversation/' + encodeURIComponent(match[1]), {
-            credentials: 'include', cache: 'no-store', headers: withToken && token ? {authorization: 'Bearer ' + token} : {}
-          });
-          const body = await response.text();
-          if (withToken) {history.status = response.status; history.ok = response.ok; history.bodyHead = body.slice(0, 200);}
-          else {history.withoutToken = {status: response.status, bodyHead: body.slice(0, 120)};}
-        }
-      }
-    } catch (error) {history.error = String((error && error.message) || error);}
+    // Conversation text is read from the mounted DOM only: requesting
+    // /backend-api/conversation would burn the account's rate limit for data the
+    // page already renders.
+    const history = {source: 'dom', api: 'not requested'};
     return {url: location.href, title: document.title, formPath: form ? path(form) : '',
       form: form ? form.outerHTML.slice(0, CAP) : '', names, buttons, readers, history};
   }
@@ -135,7 +137,7 @@ export function createDomExport({chrome, clock = Date}) {
     const lines = ['Prompt Chain DOM diagnostic', 'at: ' + new Date(clock.now()).toISOString(),
       'url: ' + (value.url || ''), 'title: ' + (value.title || ''), 'scope: ' + (value.formPath || ''), '',
       '=== MESSAGE READER ===', JSON.stringify(value.readers || null, null, 1),
-      '', '=== CONVERSATION API ===', JSON.stringify(value.history || null, null, 1),
+      '', '=== CONVERSATION SOURCE ===', JSON.stringify(value.history || null, null, 1),
       '', '=== FILENAME ELEMENTS ==='];
     for (const item of value.names || []) lines.push(JSON.stringify(item));
     lines.push('', '=== BUTTONS ===');

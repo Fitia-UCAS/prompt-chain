@@ -1,5 +1,5 @@
 (() => {
-  if(globalThis.PromptChainMessages?.version===7)return;
+  if(globalThis.PromptChainMessages?.version===8)return;
   const M=PromptFlowModel;
   const ATTRS=['data-message-author-role','data-message-role','data-turn-role','data-author-role','data-conversation-role','data-turn','data-author','data-role'];
   const MARKED=ATTRS.map(name=>'['+name+']').join(',');
@@ -8,6 +8,10 @@
   const TURNS='article,[data-testid^="conversation-turn-"],[data-turn-id],[data-turn-key],[data-message-id]';
   const ANSWER_ACTIONS='button[data-testid="copy-turn-action-button"],button[data-testid="good-response-turn-action-button"],button[data-testid="bad-response-turn-action-button"]';
   const LABEL=/^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]?\s*$/i;
+  // A speaker label is UI, never a message: the current ChatGPT build puts one
+  // inside (or next to) every message, and reading it as a message would hide
+  // the answer behind the same turn key.
+  const LABEL_PREFIX=/^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]\s*/i;
   const HEADINGS='h1,h2,h3,h4,h5,h6,[role="heading"],[data-conversation-role],.sr-only';
   const UI='button,[role="button"],script,style,template,svg,.sr-only,[hidden],[aria-hidden="true"]';
   const clean=value=>String(value||'').replace(/\r\n?/g,'\n').trim();
@@ -19,6 +23,24 @@
   function labels(node){
     const found=[...node.querySelectorAll(HEADINGS)].filter(label=>labelRole(label)&&!label.closest(USER+','+ASSISTANT+',pre,code'));
     return found.filter(label=>!found.some(other=>other!==label&&label.contains(other)));
+  }
+  function speaker(node){
+    // Cheap shape check first: speaker labels are headings or role markers, and
+    // scanning the text of every candidate on a long page is too expensive.
+    if(!node?.matches?.('h1,h2,h3,h4,h5,h6,[role="heading"],[data-conversation-role],.sr-only'))return false;
+    const text=M.semanticText(node.textContent||'').replace(/\s+/g,' ').trim();
+    return text.length>0&&text.length<=24&&LABEL.test(text);
+  }
+  function speakerLabels(node){
+    const found=[...node.querySelectorAll(HEADINGS)].filter(speaker);
+    return found.filter(label=>!found.some(other=>other!==label&&label.contains(other)));
+  }
+  function stripLabel(value){return String(value||'').replace(LABEL_PREFIX,'');}
+  // A turn holds both bodies; an answer nested inside a user bubble does not count.
+  function bodies(node){
+    const user=node.querySelector?.(USER)||null;
+    const answer=[...(node.querySelectorAll?.(ASSISTANT)||[])].find(el=>!el.closest(USER))||null;
+    return {user,answer};
   }
   function role(node){
     if(!node)return'';
@@ -45,7 +67,7 @@
       const value=[...el.childNodes].map(walk).join('');
       return /^(P|DIV|SECTION|ARTICLE|BLOCKQUOTE|H[1-6]|LI|UL|OL|PRE|TR|TABLE)$/.test(el.tagName)?'\n'+value+'\n':value;
     }
-    return clean(walk(clone));
+    return stripLabel(clean(walk(clone))).trim();
   }
   function texts(node,kind){
     if(M.platforms.providerFor(location.href)!=='chatgpt')return globalThis.PromptChainSiteMessages?.texts(node,kind)||[];
@@ -54,16 +76,23 @@
       const value=el.getAttribute('data-markdown-copy-text');
       if(value&&!/^(true|false|0|1)$/i.test(value))values.push(value);
     }
-    return [...new Set(values.map(clean).filter(Boolean))];
+    return [...new Set(values.map(value=>stripLabel(clean(value)).trim()).filter(Boolean))];
   }
-  function headingRoot(heading,kind){
-    let fallback=null;
-    for(let node=heading.parentElement,depth=0;node&&depth<18;node=node.parentElement,depth++){
-      if(node.matches('main,body,form')||labels(node).length!==1)break;
-      if(kind==='assistant'&&node.querySelector(USER))break;
-      if(!texts(node,kind).length)continue;
-      fallback=node;
-      if(kind==='assistant'&&node.querySelector(ASSISTANT))return node;
+  // The nearest ancestor that actually holds this role's body. A speaker label is
+  // only a marker: the answer often sits beside it, outside the label's wrapper.
+  function labelRoot(label,kind){
+    const selector=kind==='user'?USER+',.whitespace-pre-wrap':ASSISTANT;
+    let fallback=label.parentElement;
+    for(let node=label.parentElement,depth=0;node&&depth<18;node=node.parentElement,depth++){
+      if(node===document.body||node.matches('body,form,main,[role="dialog"]'))break;
+      // Two labels mean two messages: never merge them into one wrapper.
+      if(speakerLabels(node).length>1)break;
+      // A node holding both bodies is the turn, not a message.
+      const pair=bodies(node);
+      if(pair.user&&pair.answer)continue;
+      const found=[...node.querySelectorAll(selector)].find(el=>el!==label&&!label.contains(el));
+      if(found&&texts(found,kind).length)return node;
+      if(texts(node,kind).length)fallback=node;
     }
     return fallback;
   }
@@ -72,6 +101,15 @@
     // A turn may hold the user bubble and the answer together; the nearest role
     // wrapper is the message itself, so it must win over the whole turn.
     if(turn){
+      const pair=bodies(turn),userBody=pair.user,answerBody=pair.answer;
+      if(userBody&&answerBody){
+        // Never hand back the whole turn: it would carry both roles and make the
+        // user message and the answer share one key.
+        const answer=node.closest(ASSISTANT),bubble=node.closest(USER);
+        if(answer&&turn.contains(answer))return answer;
+        if(bubble&&turn.contains(bubble))return bubble;
+        return node;
+      }
       for(let parent=node;parent&&parent!==turn.parentElement;parent=parent.parentElement){
         if(declared(parent))return parent;
       }
@@ -117,14 +155,18 @@
     for(const main of allScopes){
     for(const node of main.querySelectorAll(TURNS+','+MARKED+','+USER+','+ASSISTANT)){
       if(node.closest('form,[data-testid="composer"],[role="dialog"],nav,aside,[role="navigation"]'))continue;
+      if(speaker(node))continue;
       const candidate=messageRoot(node,main);
+      if(speaker(candidate))continue;
+      const pair=bodies(candidate);
+      if(pair.user&&pair.answer)continue;
       if(candidate.matches(ASSISTANT)&&(candidate.querySelector(USER)||[...candidate.querySelectorAll(MARKED)].some(marked=>declared(marked)==='user')))continue;
       const kind=role(candidate);
       if(kind==='assistant'&&candidate.matches('.markdown,.prose'))bodyFallback=true;
       if(kind)roots.set(candidate,kind);
     }
-    for(const heading of labels(main)){
-      const kind=labelRole(heading),root=headingRoot(heading,kind);headingCount++;
+    for(const heading of speakerLabels(main)){
+      const kind=labelRole(heading),root=kind?labelRoot(heading,kind):null;headingCount++;
       if(root)roots.set(root,kind);
     }
     for(const button of main.querySelectorAll(ANSWER_ACTIONS)){const candidate=actionRoot(button);if(candidate){roots.set(candidate,'assistant');bodyFallback=true;}}
@@ -148,5 +190,5 @@
     const probe={scopes:allScopes.length,mainElements:document.querySelectorAll('main').length};for(const [name,selector]of Object.entries(selectors))probe[name]=allScopes.reduce((count,scope)=>count+scope.querySelectorAll(selector).length,0);
     return{messages,strategy:headingCount?'speaker-labels':bodyFallback?'body-containers':'role-attributes',probe};
   }
-  globalThis.PromptChainMessages=Object.assign(globalThis.PromptChainMessages||{},{read,role,texts,version:7});
+  globalThis.PromptChainMessages=Object.assign(globalThis.PromptChainMessages||{},{read,role,texts,version:8});
 })();

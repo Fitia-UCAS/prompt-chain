@@ -47,7 +47,7 @@ with TemporaryDirectory(prefix='pc-bare-chat-',dir=str(OUT)) as profile:
   tab_id=page.evaluate('async()=> (await chrome.tabs.query({url:"https://chatgpt.com/c/bare-fixture"}))[0].id')
   deadline=time.monotonic()+15
   while time.monotonic()<deadline:
-   ready=page.evaluate('''async({id,blind})=>{try{const reader=(await chrome.tabs.sendMessage(id,{type:'PF_STATUS'}))?.snapshot?.reader;return blind?reader?.version===7:reader?.assistants===3}catch{return false}}''',{'id':tab_id,'blind':blind})
+   ready=page.evaluate('''async({id,blind})=>{try{const reader=(await chrome.tabs.sendMessage(id,{type:'PF_STATUS'}))?.snapshot?.reader;return blind?reader?.version===8:reader?.assistants===3}catch{return false}}''',{'id':tab_id,'blind':blind})
    if ready:break
    page.wait_for_timeout(100)
   assert ready,'bare DOM did not expose three assistant replies'
