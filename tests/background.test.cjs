@@ -105,13 +105,14 @@ test('清空日志只允许侧栏，不修改运行位置或发送意图',async(
  assert.deepEqual(after,before);assert.deepEqual(h.shared.pfRun.logs,[]);
 });
 
-test('只临时保留一份验证回答，下一回答到来前不闪空；不持久保存，旧版 lastReply 自动移除',async()=>{
+test('验证回答只属于当前步骤：进入下一步立即清空；不持久保存，旧版 lastReply 自动移除',async()=>{
   const {h}=await deliveredNewChat();h.shared.pfRun.lastReply='旧版已读回答';await h.beat();
   const current=await h.message('PF_CURRENT_REPLY');assert.equal(current.ok,true);assert.equal(current.view.text,'新回答');
   assert.equal(Object.hasOwn(h.shared.pfRun,'lastReply'),false);
   assert.equal((await h.message('PF_CURRENT_REPLY',{},true)).ok,false);
+  // Step 2 starts: the panel must not keep step 1's answer as if it were this step's.
   h.advance(5000);await h.beat();
-  const next=await h.message('PF_CURRENT_REPLY');assert.equal(next.view.text,'新回答');assert.equal(next.view.index,0);
+  const next=await h.message('PF_CURRENT_REPLY');assert.equal(next.view.text,'');assert.equal(next.view.index,1);
   assert.equal(Object.hasOwn(h.shared.pfRun,'lastReply'),false);
   await h.message('PF_STOP');assert.equal((await h.message('PF_CURRENT_REPLY')).view.text,'');
 });
