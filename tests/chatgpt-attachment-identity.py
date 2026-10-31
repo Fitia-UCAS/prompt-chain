@@ -28,7 +28,7 @@ SETUP = """() => {
   window.sendCount=0;window.bridgeReceive=null;
   window.rpcCalls=[];
   window.chrome={runtime:{onMessage:{addListener(fn){window.bridgeReceive=fn;},removeListener(){}},async sendMessage(m){window.rpcCalls.push({type:m.type,displayName:m.displayName||'',fileId:m.fileId||''});if(m.type==='PF_FILE_CHUNK')return{ok:true,chunk:btoa('abc')};return{ok:true};}}};
-  window.PromptChainMessages={version:8,read:()=>({messages:[]}),role:()=>'',texts:()=>[]};
+  window.PromptChainMessages={version:9,read:()=>({messages:[]}),role:()=>'',texts:()=>[]};
   document.querySelector('button').onclick=()=>window.sendCount++;
 }"""
 

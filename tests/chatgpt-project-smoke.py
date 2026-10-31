@@ -17,16 +17,18 @@ OUT.mkdir(parents=True,exist_ok=True)
 EDGE=next(p for p in [Path(r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'),Path(r'C:\Program Files\Microsoft\Edge\Application\msedge.exe')] if p.exists())
 
 HTML='''<!doctype html><meta charset="utf-8"><style>#prompt-textarea{min-height:60px;border:1px solid}button{min-width:30px;min-height:25px}</style>
-<main><div id="thread"><div data-turn-key="turn-0"><div class="group"><h4 data-conversation-role="user">你说：</h4><div data-user-message-bubble>开场问题</div></div><div class="group"><h4 data-conversation-role="assistant">ChatGPT 说：</h4><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">开场回答</p></div></div></div></div></div></main>
+<main><div id="thread"><div data-turn-key="turn-0"><div><h4 class="sr-only" data-conversation-role="user">你说：<span>You</span></h4><div class="bg-user-message"><div class="group/user-message"><div class="w-full"><div class="text-size-chat">开场问题</div></div></div></div><h4 class="sr-only" data-conversation-role="assistant">ChatGPT 说：<span>ChatGPT</span></h4><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">开场回答</p></div></div></div></div></div></main>
 <form data-chatgpt-composer onsubmit="return false"><div id="prompt-textarea" contenteditable="true" role="textbox"></div><button type="button" data-testid="send-button">发送</button></form>
 <script>
 window.sent=[];
 const thread=document.querySelector('#thread'),editor=document.querySelector('#prompt-textarea');
 function turn(index,text){
  const node=document.createElement('div');node.setAttribute('data-turn-key','turn-'+index);
- node.innerHTML='<div class="group"><h4 data-conversation-role="user">你说：</h4><div data-user-message-bubble></div></div>'
-  +'<div class="group"><h4 data-conversation-role="assistant">ChatGPT 说：</h4><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">回答 '+index+'：已收到第 '+index+' 步。</p></div></div></div>';
- node.querySelector('[data-user-message-bubble]').textContent=text;
+ node.innerHTML='<div><h4 class="sr-only" data-conversation-role="user">你说：<span>You</span></h4>'
+  +'<div class="bg-user-message"><div class="group/user-message"><div class="w-full"><div class="text-size-chat"></div></div></div></div>'
+  +'<h4 class="sr-only" data-conversation-role="assistant">ChatGPT 说：<span>ChatGPT</span></h4>'
+  +'<div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">回答 '+index+'：已收到第 '+index+' 步。</p></div></div></div>';
+ node.querySelector('.text-size-chat').textContent=text;
  thread.append(node);
 }
 document.querySelector('[data-testid="send-button"]').onclick=()=>{

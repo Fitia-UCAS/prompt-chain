@@ -405,5 +405,5 @@ function snapshot() {
     messages:all.slice(-200).map(({key,role,fingerprint})=>({key,role,fingerprint})),reader:{version:R.version,strategy:scan.strategy,probe:scan.probe,count:all.length,users:all.filter(message=>message.role==='user').length,assistants:all.filter(message=>message.role==='assistant').length},error};
 }
 
-globalThis.PromptFlowSupervisor=Object.assign(globalThis.PromptFlowSupervisor||{},{msgs,messageRole,key,text,composer,ctext,fill,sendBtn,generating,assistantReplySettled,snapshot,scope,describe,rendered,sleep,readerVersion:8,engineVersion:10,attachmentRoots,attachmentSeeds,scanAttachment,scanAttachmentSet,attachmentCardCount,attachmentNameSample});
+globalThis.PromptFlowSupervisor=Object.assign(globalThis.PromptFlowSupervisor||{},{msgs,messageRole,key,text,composer,ctext,fill,sendBtn,generating,assistantReplySettled,snapshot,scope,describe,rendered,sleep,readerVersion:9,engineVersion:10,attachmentRoots,attachmentSeeds,scanAttachment,scanAttachmentSet,attachmentCardCount,attachmentNameSample});
 })();

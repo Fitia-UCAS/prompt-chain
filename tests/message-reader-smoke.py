@@ -31,7 +31,7 @@ document.querySelector('[data-testid="fruitjuice-send-button"]').onclick=()=>{
 results=[]
 with sync_playwright() as p:
  browser=p.chromium.launch(executable_path=str(EDGE),headless=True)
- for mode in ['bare','bare_user','h2','ids','actions','shadow','project','project_split','attribute','rich','folded','attachment','image','busy','turns','pair']:
+ for mode in ['bare','bare_user','h2','ids','actions','shadow','project','project_split','project_v2','attribute','rich','folded','attachment','image','busy','turns','pair']:
   page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.route('https://chatgpt.com/**',lambda route:route.fulfill(status=200,content_type='text/html',body=HTML))
   page.goto('https://chatgpt.com/c/message-reader')
@@ -52,6 +52,8 @@ with sync_playwright() as p:
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-turn-key="t1"><div class="group"><h4 data-conversation-role="user">你说：</h4><div data-user-message-bubble>历史问题</div></div><div class="group"><h4 data-conversation-role="assistant">ChatGPT 说：</h4><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">历史回答</p></div></div></div></div>'}''')
   if mode=='project_split':
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-turn-key="t1"><div class="group"><div data-user-message-bubble>历史问题</div></div><div class="group"><h4 data-conversation-role="assistant">ChatGPT 说：</h4></div><div class="group"><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">历史回答</p></div></div></div></div>'}''')
+  if mode=='project_v2':
+   page.evaluate('''()=>{document.querySelector('main').innerHTML='<div data-turn-key="t1"><div><h4 class="sr-only" data-conversation-role="user">你说：<span>You</span></h4><div class="bg-user-message"><div class="group/user-message"><div class="w-full"><div class="text-size-chat">历史问题</div></div></div></div><h4 class="sr-only" data-conversation-role="assistant">ChatGPT 说：<span>ChatGPT</span></h4><div class="MarkdownRoot-rZKhxa"><div class="DilRenderer-tB76Jj"><p class="TextBase-qM5iDq">历史回答</p></div></div></div></div>'}''')
   if mode=='shadow':
    page.evaluate('''()=>{document.querySelector('main').innerHTML='<div id="conversation-shadow"></div>';document.querySelector('#conversation-shadow').attachShadow({mode:'open'}).innerHTML='<section><div data-user-message-bubble>历史问题</div></section><section><div class="markdown prose">历史回答</div></section>'}''')
   for file in ['vendor/marked/marked.min.js','shared/platforms.js','shared/model.js','content/message-reader.js','content/supervisor-engine.js','content/bridge.js']:page.add_script_tag(path=str(ROOT/file))

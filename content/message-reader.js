@@ -1,17 +1,18 @@
 (() => {
-  if(globalThis.PromptChainMessages?.version===8)return;
+  if(globalThis.PromptChainMessages?.version===9)return;
   const M=PromptFlowModel;
   const ATTRS=['data-message-author-role','data-message-role','data-turn-role','data-author-role','data-conversation-role','data-turn','data-author','data-role'];
   const MARKED=ATTRS.map(name=>'['+name+']').join(',');
-  const USER='[data-user-message-bubble],[data-user-message-copy],[data-testid="user-message"],[class*="user-message-bubble"]';
+  const USER='[data-user-message-bubble],[data-user-message-copy],[data-testid="user-message"],[class*="bg-user-message"],[class*="user-message-bubble"]';
   const ASSISTANT='[data-assistant-markdown],[data-assistant-markdown-root],[data-markdown-copy-text],[data-testid="assistant-message"],[class*="MarkdownRoot"],[class*="markdown-root"],.markdown,.prose';
   const TURNS='article,[data-testid^="conversation-turn-"],[data-turn-id],[data-turn-key],[data-message-id]';
   const ANSWER_ACTIONS='button[data-testid="copy-turn-action-button"],button[data-testid="good-response-turn-action-button"],button[data-testid="bad-response-turn-action-button"]';
-  const LABEL=/^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]?\s*$/i;
+  // This build renders both languages inside the label: "你说：You", "ChatGPT 说：ChatGPT".
+  const LABEL=/^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]?\s*(?:You|ChatGPT)?\s*$/i;
   // A speaker label is UI, never a message: the current ChatGPT build puts one
   // inside (or next to) every message, and reading it as a message would hide
   // the answer behind the same turn key.
-  const LABEL_PREFIX=/^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]\s*/i;
+  const LABEL_PREFIX=/^(你说|ChatGPT\s*说|You\s+said|ChatGPT\s+said)\s*[：:]\s*(?:You|ChatGPT)?[ \t]*\n?/i;
   const HEADINGS='h1,h2,h3,h4,h5,h6,[role="heading"],[data-conversation-role],.sr-only';
   const UI='button,[role="button"],script,style,template,svg,.sr-only,[hidden],[aria-hidden="true"]';
   const clean=value=>String(value||'').replace(/\r\n?/g,'\n').trim();
@@ -82,14 +83,12 @@
   // only a marker: the answer often sits beside it, outside the label's wrapper.
   function labelRoot(label,kind){
     const selector=kind==='user'?USER+',.whitespace-pre-wrap':ASSISTANT;
-    let fallback=label.parentElement;
+    let fallback=null;
     for(let node=label.parentElement,depth=0;node&&depth<18;node=node.parentElement,depth++){
       if(node===document.body||node.matches('body,form,main,[role="dialog"]'))break;
-      // Two labels mean two messages: never merge them into one wrapper.
-      if(speakerLabels(node).length>1)break;
-      // A node holding both bodies is the turn, not a message.
+      // A wrapper holding both bodies or two labels is a turn, never one message.
       const pair=bodies(node);
-      if(pair.user&&pair.answer)continue;
+      if((pair.user&&pair.answer)||speakerLabels(node).length>1)break;
       const found=[...node.querySelectorAll(selector)].find(el=>el!==label&&!label.contains(el));
       if(found&&texts(found,kind).length)return node;
       if(texts(node,kind).length)fallback=node;
@@ -190,5 +189,5 @@
     const probe={scopes:allScopes.length,mainElements:document.querySelectorAll('main').length};for(const [name,selector]of Object.entries(selectors))probe[name]=allScopes.reduce((count,scope)=>count+scope.querySelectorAll(selector).length,0);
     return{messages,strategy:headingCount?'speaker-labels':bodyFallback?'body-containers':'role-attributes',probe};
   }
-  globalThis.PromptChainMessages=Object.assign(globalThis.PromptChainMessages||{},{read,role,texts,version:8});
+  globalThis.PromptChainMessages=Object.assign(globalThis.PromptChainMessages||{},{read,role,texts,version:9});
 })();
